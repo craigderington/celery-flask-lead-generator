@@ -2,9 +2,9 @@ from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, url_for
 
-from example import db
-from example.models import Message
-from example.tasks import long_task
+from earlauto import db
+from earlauto.models import Message
+from earlauto.tasks import long_task
 
 home = Blueprint('home', __name__)
 

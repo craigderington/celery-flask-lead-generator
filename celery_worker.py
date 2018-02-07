@@ -1,8 +1,8 @@
 from celery import Celery
 from celery.schedules import crontab
 
-from example import create_app
-from example.tasks import log, reverse_messages, long_task
+from earlauto import create_app
+from earlauto.tasks import log, reverse_messages, long_task
 
 
 def create_celery(app):

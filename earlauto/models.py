@@ -1,4 +1,4 @@
-from example import db
+from earlauto import db
 
 
 class Message(db.Model):

@@ -3,7 +3,7 @@ import os
 
 from click import echo
 
-from example import create_app
+from earlauto import create_app
 
 app = create_app('development')
 

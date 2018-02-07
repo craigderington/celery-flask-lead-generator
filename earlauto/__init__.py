@@ -19,7 +19,7 @@ def create_app(config_name=None):
 
     db.init_app(app)
 
-    from example.views import home
+    from earlauto.views import home
     app.register_blueprint(home)
 
     return app
