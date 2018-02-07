@@ -12,6 +12,7 @@ home = Blueprint('home', __name__)
 @home.before_app_first_request
 def init_db():
     db.create_all()
+    db.session.commit()
 
 
 @home.route('/')

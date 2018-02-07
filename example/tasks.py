@@ -46,7 +46,9 @@ def reverse_messages():
     """Reverse all messages in DB"""
     for message in Message.query.all():
         words = message.text.split()
-        message.text = " ".join(reversed(words))
+        message_text = " ".join(reversed(words))
+        reversed_message = Message(text=message_text)
+        db.session.add(reversed_message)
         db.session.commit()
 
 

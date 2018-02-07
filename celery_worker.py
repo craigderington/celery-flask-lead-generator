@@ -2,13 +2,13 @@ from celery import Celery
 from celery.schedules import crontab
 
 from example import create_app
-from example.tasks import log, reverse_messages
+from example.tasks import log, reverse_messages, long_task
 
 
 def create_celery(app):
     celery = Celery(app.import_name,
                     backend=app.config['CELERY_RESULT_BACKEND'],
-                    broker=app.config['BROKER_URL'])
+                    broker=app.config['CELERY_BROKER_URL'])
     celery.conf.update(app.config)
     TaskBase = celery.Task
 
@@ -28,10 +28,12 @@ celery = create_celery(flask_app)
 @celery.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
     # Calls reverse_messages every 10 seconds.
-    sender.add_periodic_task(10.0, reverse_messages, name='reverse every 10')
+    sender.add_periodic_task(10.0, reverse_messages, name='Reverse database entry every 10 seconds.')
 
     # Calls log('Logging Stuff') every 30 seconds
-    sender.add_periodic_task(30.0, log.s(('Logging Stuff')), name='Log every 30')
+    sender.add_periodic_task(30.0, log.s(('Logging Stuff')), name='Log the DEBUG output every 30 seconds.')
+
+    sender.add_periodic_task(60.0, long_task, name='Log every 60 seconds.')
 
     # Executes every Monday morning at 7:30 a.m.
     sender.add_periodic_task(

@@ -52,3 +52,10 @@ coverage.xml
 
 # Sphinx documentation
 docs/_build/
+
+# PyCharm
+.idea/
+.env/
+celerybeat-schedule
+*.sqlite
+*.db

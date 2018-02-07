@@ -1,29 +1,39 @@
 import os
 
 BASEDIR = os.path.abspath(os.path.dirname(__file__))
-SQLITE_DB = 'sqlite:///' + os.path.join(BASEDIR, 'db.sqlite')
 
 
 class Config(object):
     DEBUG = False
-    SECRET_KEY = 'bf0926d3-1fd6-4d26-bb79-fb845c'
+    SECRET_KEY = os.urandom(32)
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', SQLITE_DB)
+    SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:deadbeef@localhost:3306/celery_example'
+    # SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', SQLITE_DB)
 
-    CELERY_TIMEZONE = 'Europe/Berlin'
-    BROKER_URL = 'redis://localhost:6379/0'
-    CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+    CELERY_TIMEZONE = 'US/Eastern'
+    CELERY_BROKER_URL = 'amqp://localhost'
+    CELERY_RESULT_BACKEND = 'amqp://localhost'
     CELERY_SEND_TASK_SENT_EVENT = True
 
 
 class DevelopmentConfig(Config):
     DEBUG = True
-    SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:admin@localhost:3306/db'
+    SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:deadbeef@localhost:3306/celery_example'
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    CELERY_TIMEZONE = 'US/Eastern'
+    CELERY_BROKER_URL = 'amqp://localhost'
+    CELERY_RESULT_BACKEND = 'amqp://localhost'
+    CELERY_SEND_TASK_SENT_EVENT = True
+
+    MONGODB_URI = 'localhost'
+    MONGO_DB = 'earl-pixel-tracker'
 
 
 class ProductionConfig(Config):
     pass
+
 
 config = {
     'development': DevelopmentConfig,
