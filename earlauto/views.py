@@ -1,9 +1,7 @@
 from datetime import datetime, timedelta
-
 from flask import Blueprint, jsonify, url_for
-
 from earlauto import db
-from earlauto.models import Message
+from earlauto.models import Visitor, AppendedVisitor
 from earlauto.tasks import long_task
 
 home = Blueprint('home', __name__)
@@ -56,7 +54,7 @@ def taskstatus(task_id):
     return jsonify(response)
 
 
-@home.route('/messages/')
-def messages():
-    messages = Message.query.all()
-    return jsonify([message.text for message in messages])
+@home.route('/visitors/')
+def visitors():
+    visitors = Visitor.query.all()
+    return jsonify([visitor.ip for visitor in visitors])

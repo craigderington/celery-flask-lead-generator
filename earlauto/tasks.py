@@ -1,13 +1,22 @@
+import datetime
 import random
 import time
-
+import pymongo
+import config
+import json
 from celery.signals import task_postrun
 from celery.utils.log import get_task_logger
 
 from earlauto import celery, db
-from earlauto.models import Message
+from earlauto.models import Visitor, Campaign
+from sqlalchemy import and_
 
 logger = get_task_logger(__name__)
+
+
+def convert_datetime_object(o):
+    if isinstance(o, datetime.datetime):
+        return o.__str__()
 
 
 @celery.task(bind=True)
@@ -41,7 +50,7 @@ def log(message):
     logger.critical(message)
 
 
-@celery.task
+# @celery.task
 def reverse_messages():
     """Reverse all messages in DB"""
     for message in Message.query.all():
@@ -59,3 +68,86 @@ def close_session(*args, **kwargs):
     # context, this ensures tasks have a fresh session (e.g. session errors
     # won't propagate across tasks)
     db.session.remove()
+
+
+@celery.task()
+def get_new_visitors():
+    """
+    Get the list of all unprocessed new visitors from MongoDB and set up for
+    processing into MySQL database
+    :return: mark_complete
+    """
+    # connect to MongoDB
+    try:
+
+        client = pymongo.MongoClient(config.DevelopmentConfig.MONGO_SERVER, 27017)
+        mongodb = client[config.DevelopmentConfig.MONGO_DB]
+
+        # query the sent collection for new IP's
+        sent_collection = mongodb.sent_collection
+        data = sent_collection.find({'processed': 0}, {'_id': 1, 'ip': 1, 'agent': 1, 'send_hash': 1,
+                                                       'job_number': 1, 'client_id': 1, 'sent_date': 1,
+                                                       'campaign_hash': 1, 'open_hash': 1, 'send_hash': 1})
+
+        if data:
+            for item in data:
+                record_id = item['_id']
+                client_id = item['client_id']
+                job_number = item['job_number']
+                ip_addr = item['ip']
+                agent = item['agent']
+                sent_date = item['sent_date']
+                campaign_hash = item['campaign_hash']
+                open_hash = item['open_hash']
+                send_hash = item['send_hash']
+                raw_data = {
+                    'client_id': client_id,
+                    'job_number': job_number,
+                    'ip_addr': ip_addr,
+                    'agent': agent,
+                    'sent_date': str(sent_date),
+                    'campaign_hash': campaign_hash,
+                    'open_hash': open_hash,
+                    'send_hash': send_hash,
+                    'appended': 0
+                }
+
+                raw_data = json.dumps(raw_data, default=convert_datetime_object)
+
+                campaign = Campaign.query.filter(and_(
+                    Campaign.job_number == job_number,
+                    Campaign.client_id == client_id
+                )).first()
+
+                new_visitor = Visitor(
+                    campaign_id=campaign.id,
+                    store_id=campaign.store_id,
+                    created_date=sent_date,
+                    ip=ip_addr,
+                    user_agent=agent,
+                    job_number=job_number,
+                    client_id=client_id,
+                    open_hash=open_hash,
+                    campaign_hash=campaign_hash,
+                    send_hash=send_hash,
+                    num_visits=1,
+                    last_visit=sent_date,
+                    raw_data=raw_data,
+                    processed=False
+                )
+                db.session.add(new_visitor)
+                db.session.commit()
+
+                # update the processed flag in MongoDB and set to True
+                sent_collection.update_one({'_id': record_id}, {'$set': {'processed': 1}}, True)
+
+            return True
+
+        else:
+            # Log a message to the console
+            message = "There are zero new visitors waiting to be processed..."
+            logger.info(message)
+            return 'No Records Found!'
+
+    except pymongo.errors.ConnectionFailure as e:
+        print('Could not connect to the Pixel Tracker MongoDB server: {}'.format(e))
