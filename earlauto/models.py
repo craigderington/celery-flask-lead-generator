@@ -1,6 +1,7 @@
 from earlauto import db
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean, Text
+from sqlalchemy.types import DECIMAL
 from sqlalchemy.orm import relationship
 
 
@@ -27,12 +28,35 @@ class Visitor(db.Model):
     processed = Column(Boolean, default=False)
     campaign = relationship("Campaign")
     store = relationship("Store")
+    country_name = Column(String(255))
+    city = Column(String(255))
+    time_zone = Column(String(50))
+    longitude = Column(DECIMAL(11, 8))
+    latitude = Column(DECIMAL(10, 8))
+    metro_code = Column(String(10))
+    country_code = Column(String(2))
+    country_code3 = Column(String(3))
+    dma_code = Column(String(3))
+    area_code = Column(String(3))
+    postal_code = Column(String(5))
+    region = Column(String(50))
+    region_name = Column(String(255))
+    traffic_type = Column(String(255))
 
     def __repr__(self):
         return 'From {} on {} for {}'.format(
             self.ip,
             self.created_date,
             self.campaign
+        )
+
+    def get_geoip_data(self):
+        return '{} {} {} {} {}'.format(
+            self.country_code,
+            self.city,
+            self.region,
+            self.postal_code,
+            self.traffic_type
         )
 
 
