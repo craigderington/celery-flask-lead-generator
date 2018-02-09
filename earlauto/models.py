@@ -77,7 +77,7 @@ class AppendedVisitor(db.Model):
     zip_code = Column(String(5))
     zip_4 = Column(Integer)
     credit_range = Column(String(50))
-    car_year = Column(Integer)
+    car_year = Column(String(10))
     car_make = Column(String(255))
     car_model = Column(String(255))
     processed = Column(Boolean, default=False)
