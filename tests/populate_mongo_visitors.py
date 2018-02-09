@@ -27,7 +27,7 @@ job_number_list = ['39650', '39651', '39656']
 client_id_list = ['zrx9876t4u', 'xyzTr83932', 'mnx4274tru']
 campaign_list = ['EXIT_REALTY', 'ORLANDO_NISSAN', 'PYTHON-DEV-SYSTEMS']
 ip_list = []
-line_counter = 0
+
 
 class DateTimeEncoder(json.JSONEncoder):
     def default(self, o):
@@ -49,24 +49,31 @@ def main():
     Populate the Mongo DB database to simulate real users
     :return: None
     """
+    # set the counter to zero
+    line_counter = 0
 
     # read in our sample data
     with open('data/M1-10K-IP-Sample-Data.csv') as csv_file:
+        # assign variable to data from csv file
         reader = csv.reader(csv_file, delimiter=',')
+
+        # skip header row
+        next(reader)
 
         for row in reader:
             ip = row[0]
             ip_list.append(ip)
 
-    for ip in ip_list:
-        line_counter = 0
+    for ip_addr in ip_list:
+        # set variables from the lists above
         agent = random.choice(user_agent_list)
         job_number = random.choice(job_number_list)
         client_id = random.choice(client_id_list)
         campaign = random.choice(campaign_list)
 
+        # create the visitor event record
         event_record = {
-            'ip': ip,
+            'ip': ip_addr,
             'job_number': job_number,
             'client_id': client_id,
             'campaign': campaign,
@@ -76,11 +83,13 @@ def main():
             'processed': 0
         }
 
+        # create send, campaign and open hashes
         send_hash = hashlib.sha1('{}'.format(event_record).encode('utf-8')).hexdigest()
         campaign_hash = hashlib.sha1(event_record['campaign'].encode('utf-8')).hexdigest()
         open_hash = hashlib.sha1('{}:{}'.format(event_record['campaign'],
                                  event_record['job_number']).encode('utf-8')).hexdigest()
 
+        # update the event record
         event_record['send_hash'] = send_hash
         event_record['campaign_hash'] = campaign_hash
         event_record['open_hash'] = open_hash
@@ -94,7 +103,7 @@ def main():
 
         if campaign_collection.find_one({'campaign_hash': campaign_hash}) is None:
             campaign_collection.insert_one({
-                'ip': ip,
+                'ip': ip_addr,
                 'campaign_hash': campaign_hash,
                 'campaign': event_record['campaign'],
                 'job_number': event_record['job_number'],
@@ -109,7 +118,7 @@ def main():
 
         if open_collection.find_one({'open_hash': open_hash}) is None:
             open_collection.insert_one({
-                'ip': ip,
+                'ip': ip_addr,
                 'open_hash': open_hash,
                 'campaign_hash': campaign_hash,
                 'campaign': event_record['campaign'],
@@ -121,7 +130,7 @@ def main():
             open_collection.update_one({'open_hash': open_hash}, {'$inc': {'sends': 1}}, True)
 
         # print the send hash to the console
-        print(send_hash)
+        print(ip_addr, send_hash)
         time.sleep(0.005)
         line_counter += 1
 
