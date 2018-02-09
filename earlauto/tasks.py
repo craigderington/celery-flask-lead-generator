@@ -5,11 +5,12 @@ import pymongo
 import config
 import json
 import GeoIP
+import requests
 from celery.signals import task_postrun
 from celery.utils.log import get_task_logger
 
 from earlauto import celery, db
-from earlauto.models import Visitor, Campaign
+from earlauto.models import Visitor, Campaign, AppendedVisitor
 from sqlalchemy import and_
 
 logger = get_task_logger(__name__)
@@ -50,22 +51,7 @@ def long_task(self):
 @celery.task
 def log(message):
     """Print some log messages"""
-    logger.debug(message)
     logger.info(message)
-    logger.warning(message)
-    logger.error(message)
-    logger.critical(message)
-
-
-# @celery.task
-def reverse_messages():
-    """Reverse all messages in DB"""
-    for message in Message.query.all():
-        words = message.text.split()
-        message_text = " ".join(reversed(words))
-        reversed_message = Message(text=message_text)
-        db.session.add(reversed_message)
-        db.session.commit()
 
 
 @task_postrun.connect
@@ -77,7 +63,7 @@ def close_session(*args, **kwargs):
     db.session.remove()
 
 
-@celery.task()
+@celery.task(queue='visitors')
 def get_new_visitors():
     """
     Get the list of all unprocessed new visitors from MongoDB and set up for
@@ -228,3 +214,65 @@ def get_new_visitors():
 
     except pymongo.errors.ConnectionFailure as e:
         print('Could not connect to the Pixel Tracker MongoDB server: {}'.format(e))
+
+
+@celery.task(queue='append_visitors')
+def append_visitors():
+    """
+    Send Visitors to M1 for Data Append
+    :return: json
+    """
+    #create request headers
+    hdr = {'user-agent': 'EARL Automation Server', 'content-type': 'application/json'}
+
+    visitors = Visitor.query.filter(and_(
+        Visitor.processed == 0,
+        Visitor.appended == 0,
+        Visitor.country_code == 'US'
+    )).all()
+
+    for visitor in visitors:
+
+        campaign = Campaign.query.filter(and_(
+            Campaign.client_id == visitor.client_id,
+            Campaign.job_number == visitor.job_number
+        )).first()
+
+        url = 'https://datamatchapi.com/DMSApi/GetDmsApiData?IP={}&Dealer=DMS&Client=DMS&SubClient=Diamond-CRMDev&product=earl' \
+              '&JobNumber={}&ClientID={}&VendorID=DMS&DaysToSuppress=0&Radius={}&ZipCode={}'.format(visitor.ip,
+                                                                                                    visitor.job_number,
+                                                                                                    visitor.client_id,
+                                                                                                    campaign.radius,
+                                                                                                    campaign.postal_code)
+
+        # make the M1 request
+        r = requests.get(url, headers=hdr)
+
+        if r.status_code == 200:
+            if 'FirstName' in r.content:
+                data = r.json()
+
+                appended_visitor = AppendedVisitor(
+                    visitor=visitor.id,
+                    created_date=visitor.created_date,
+                    first_name=data['FirstName'],
+                    last_name=data['LastName'],
+                    email=data['email'],
+                    home_phone=data['phone'],
+                    cell_phone=data['phone'],
+                    address1=data['address'],
+                    city=data['city'],
+                    state=data['city'],
+                    zip_code=data['zip_code'],
+                    credit_range=data['credit_range'],
+                    car_year=data['car_year'],
+                    car_model=data['car_model'],
+                    car_make=data['car_make'],
+                    processed=False
+                )
+
+                db.session.add(appended_visitor)
+                db.session.commit()
+
+
+

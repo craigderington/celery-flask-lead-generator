@@ -64,7 +64,7 @@ def main():
             ip = row[0]
             ip_list.append(ip)
 
-    for ip_addr in ip_list:
+    for ip_addr in ip_list[10:310]:
         # set variables from the lists above
         agent = random.choice(user_agent_list)
         job_number = random.choice(job_number_list)

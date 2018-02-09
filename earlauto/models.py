@@ -1,7 +1,6 @@
 from earlauto import db
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean, Text
-from sqlalchemy.types import DECIMAL
 from sqlalchemy.orm import relationship
 
 
@@ -31,8 +30,8 @@ class Visitor(db.Model):
     country_name = Column(String(255))
     city = Column(String(255))
     time_zone = Column(String(50))
-    longitude = Column(DECIMAL(11, 8))
-    latitude = Column(DECIMAL(10, 8))
+    longitude = Column(String(50))
+    latitude = Column(String(50))
     metro_code = Column(String(10))
     country_code = Column(String(2))
     country_code3 = Column(String(3))
