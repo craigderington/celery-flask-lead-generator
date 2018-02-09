@@ -84,6 +84,11 @@ def get_new_visitors():
     processing into MySQL database
     :return: mark_complete
     """
+
+    # set date vars
+    current_time = datetime.datetime.now()
+    one_day_ago = current_time - datetime.timedelta(hours=1)
+
     # connect to MongoDB
     try:
 
@@ -102,14 +107,15 @@ def get_new_visitors():
 
             for item in data:
                 m_id = item['_id']
-                # check the IP against the local database
-                # if local_ip returns True, increment the
+                # check the IP against the local MySQL database
+                # if visitor_exists returns True, increment the
                 # counter and skip creating the new visitor
-                # mysql db contains indexes created for
-                # ip_index and send_hash_index
+                # mysql db contains indexes created for ip_index
+                # and campaign_hash_index
                 visitor_exists = Visitor.query.filter(and_(
                     Visitor.ip == item['ip'],
-                    Visitor.campaign_hash == item['campaign_hash']
+                    Visitor.campaign_hash == item['campaign_hash'],
+                    Visitor.created_date < one_day_ago
                 )).first()
 
                 if visitor_exists:
