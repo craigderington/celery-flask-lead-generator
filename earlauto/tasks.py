@@ -64,7 +64,7 @@ def close_session(*args, **kwargs):
     db.session.remove()
 
 
-@celery.task(queue='visitors')
+@celery.task()
 def get_new_visitors():
     """
     Get the list of all unprocessed new visitors from MongoDB and set up for
@@ -192,19 +192,33 @@ def get_new_visitors():
                         postal_code=geo_data['postal_code'],
                         region=geo_data['region'],
                         region_name=geo_data['region_name'],
-                        traffic_type=''
+                        traffic_type='',
+                        retry_counter=0,
+                        last_retry=datetime.datetime.now(),
+                        status='NEW'
                     )
                     db.session.add(new_visitor)
                     db.session.commit()
 
                     # update the processed flag in MongoDB and set to True
                     sent_collection.update_one({'_id': record_id}, {'$set': {'processed': 1}}, True)
+                    logger.info('Visitor from {} created for {} for Campaign: {}. '.format(
+                        new_visitor.ip,
+                        new_visitor.store_id,
+                        new_visitor.campaign_hash
+                    ))
+                    print('Next...')
 
                 # if the visitor already existed and te number of visits was incremented,
                 # continue to update the processed flag for the IPs
                 # update the processed flag in MongoDB and set to True
                 sent_collection.update_one({'_id': m_id}, {'$set': {'processed': 1}}, True)
-
+                logger.info('Visitor exists. {} has visited {} times.  Last Visit: {}'.format(
+                    visitor_exists.id,
+                    visitor_exists.num_visits,
+                    visitor_exists.last_visit
+                ))
+                print('Incrementing Visitor Counter!  Next...')
             return data_count
 
         else:
@@ -218,7 +232,7 @@ def get_new_visitors():
         print('Could not connect to the Pixel Tracker MongoDB server: {}'.format(e))
 
 
-@celery.task(queue='append_visitors')
+@celery.task()
 def append_visitors():
     """
     Send Visitors to M1 for Data Append
@@ -316,7 +330,11 @@ def append_visitors():
                                 visitor.status = 'APPENDED'
                                 db.session.commit()
                                 logger.info('Visitor Appended: {} {} {} {} {}'.format(
-                                    first_name, last_name, city, state, zip_code
+                                    first_name.title(),
+                                    last_name.title(),
+                                    city.title(),
+                                    state.upper(),
+                                    zip_code
                                 ))
                             else:
                                 # update the visitor instance with the appended flag
