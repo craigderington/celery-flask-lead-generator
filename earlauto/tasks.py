@@ -52,7 +52,7 @@ def long_task(self):
 @celery.task
 def log(message):
     """Print some log messages"""
-    logger.info(message)
+    logger.debug(message)
 
 
 @task_postrun.connect
@@ -86,7 +86,7 @@ def get_new_visitors():
         sent_collection = mongodb.sent_collection
         data = sent_collection.find({'processed': 0}, {'_id': 1, 'ip': 1, 'agent': 1, 'send_hash': 1,
                                                        'job_number': 1, 'client_id': 1, 'sent_date': 1,
-                                                       'campaign_hash': 1, 'open_hash': 1, 'send_hash': 1})
+                                                       'campaign_hash': 1, 'open_hash': 1, 'send_hash': 1}).limit(10)
         data_count = data.count(True)
 
         # if data has new visitors to process
@@ -209,11 +209,12 @@ def get_new_visitors():
 
         else:
             # Log a message to the console
-            message = "There are zero new visitors waiting to be processed..."
-            logger.info(message)
+            logger.info('There are zero new visitors waiting to be processed...')
+            print('No new visitors.  Process exiting...')
             return 'No Records Found!'
 
     except pymongo.errors.ConnectionFailure as e:
+        logger.critical('Error connecting to MongoDB.  Send alerts.')
         print('Could not connect to the Pixel Tracker MongoDB server: {}'.format(e))
 
 
@@ -225,13 +226,15 @@ def append_visitors():
     """
     # create request headers
     hdr = {'user-agent': 'EARL Automation Server', 'content-type': 'application/json'}
+    retry_value = 3
 
     try:
 
         visitors = Visitor.query.filter(and_(
             Visitor.processed == 0,
             Visitor.appended == 0,
-            Visitor.country_code == 'US'
+            Visitor.country_code == 'US',
+            Visitor.retry_counter < retry_value
         )).limit(10).all()
 
         # if the query returns True
@@ -310,19 +313,31 @@ def append_visitors():
                                 # update the visitor instance with the appended flag
                                 visitor.appended = True
                                 visitor.processed = True
+                                visitor.status = 'APPENDED'
                                 db.session.commit()
-                                logger.info('Visitor Appended')
+                                logger.info('Visitor Appended: {} {} {} {} {}'.format(
+                                    first_name, last_name, city, state, zip_code
+                                ))
                             else:
                                 # update the visitor instance with the appended flag
                                 visitor.appended = False
                                 visitor.processed = True
+                                visitor.status = 'IPNOTFOUND'
                                 db.session.commit()
-                                logger.warning('No match on IP')
+                                logger.warning('No match on IP: {}'.format(visitor.ip))
 
                         elif r.status_code == 404:
+                            visitor.retry_counter += 1
+                            visitor.last_retry = datetime.datetime.now()
+                            visitor.status = 'ERROR404'
                             logger.warning('M1 404 Response: Page Not Found/Data Malformed.')
-                            print('M1 Returned 404:  Will retry next round...')
+                            print('M1 Returned 404:  Will retry Visitor ID: {} @ IP: {} next round.'.format(
+                                visitor.id, visitor.ip
+                            ))
                         elif r.status_code == 503:
+                            visitor.retry_counter += 1
+                            visitor.last_retry = datetime.datetime.now()
+                            visitor.status = 'ERROR503'
                             logger.critical('M1 503 Response:  Critical')
                             print('M1 Returned 503:  Service Unavailable')
                         else:

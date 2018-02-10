@@ -41,6 +41,9 @@ class Visitor(db.Model):
     region = Column(String(50))
     region_name = Column(String(255))
     traffic_type = Column(String(255))
+    retry_counter = Column(Integer)
+    last_retry = Column(DateTime)
+    status = Column(String(10))
 
     def __repr__(self):
         return 'From {} on {} for {}'.format(
