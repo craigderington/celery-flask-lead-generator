@@ -12,6 +12,7 @@ from celery.utils.log import get_task_logger
 from earlauto import celery, db
 from earlauto.models import Visitor, Campaign, AppendedVisitor, Store
 from sqlalchemy import and_
+from sqlalchemy import exc
 
 logger = get_task_logger(__name__)
 
@@ -222,105 +223,124 @@ def append_visitors():
     Send Visitors to M1 for Data Append
     :return: json
     """
-    #create request headers
+    # create request headers
     hdr = {'user-agent': 'EARL Automation Server', 'content-type': 'application/json'}
 
-    visitors = Visitor.query.filter(and_(
-        Visitor.processed == 0,
-        Visitor.appended == 0,
-        Visitor.country_code == 'US'
-    )).limit(10).all()
+    try:
 
-    for visitor in visitors:
+        visitors = Visitor.query.filter(and_(
+            Visitor.processed == 0,
+            Visitor.appended == 0,
+            Visitor.country_code == 'US'
+        )).limit(10).all()
 
-        # get our campaign data for the M1 API call
-        campaign = Campaign.query.filter(and_(
-            Campaign.client_id == visitor.client_id,
-            Campaign.job_number == visitor.job_number
-        )).first()
+        # if the query returns True
+        if visitors:
 
-        # we also need the store's zip code
-        store = Store.query.filter(
-            Store.id == campaign.store_id
-        ).first()
+            for visitor in visitors:
 
-        url = 'https://datamatchapi.com/DMSApi/GetDmsApiData?IP={}&Dealer=DMS&Client=DMS&SubClient=Diamond-CRMDev&product=earl' \
-              '&JobNumber={}&ClientID={}&VendorID=DMS&DaysToSuppress=0&Radius={}&ZipCode={}'.format(visitor.ip,
-                                                                                                    visitor.job_number,
-                                                                                                    visitor.client_id,
-                                                                                                    campaign.radius,
-                                                                                                    store.zip_code)
+                try:
 
-        # make the M1 request
-        r = requests.get(url, headers=hdr)
+                    # get our campaign data for the M1 API call
+                    campaign = Campaign.query.filter(and_(
+                        Campaign.client_id == visitor.client_id,
+                        Campaign.job_number == visitor.job_number
+                    )).first()
 
-        # get the response and process appended visitors
-        if r.status_code == 200:
-            json_obj = json.loads(r.text)
-            # print(json_obj)
+                    if campaign:
 
-            if isinstance(json_obj, list) and 'FirstName' in json_obj[0]:
-                first_name = json_obj[0]['FirstName']
-                last_name = json_obj[0]['LastName']
-                email = json_obj[0]['EMail']
-                credit_range = json_obj[0]['InferredCreditScore']
-                car_make = json_obj[0]['MAKE']
-                state = json_obj[0]['state']
-                city = json_obj[0]['City']
-                zip_code = json_obj[0]['ZipCode']
-                car_year = json_obj[0]['YEAR']
-                car_model = json_obj[0]['MODEL']
-                address = json_obj[0]['Address']
-                zip4 = json_obj[0]['Zip4']
-                phone = json_obj[0]['Cell']
+                        # we also need the store's zip code
+                        store = Store.query.filter(
+                            Store.id == campaign.store_id
+                        ).first()
 
-                # create the appended visitor record and commit
-                appended_visitor = AppendedVisitor(
-                    visitor=visitor.id,
-                    created_date=visitor.created_date,
-                    first_name=first_name.capitalize(),
-                    last_name=last_name.capitalize(),
-                    email=email,
-                    home_phone=phone,
-                    cell_phone=phone,
-                    address1=address,
-                    city=city.title(),
-                    state=state.upper(),
-                    zip_code=zip_code,
-                    credit_range=credit_range,
-                    car_year=car_year,
-                    car_model=car_model.title(),
-                    car_make=car_make.capitalize(),
-                    processed=False
-                )
+                        url = 'https://datamatchapi.com/DMSApi/GetDmsApiData?IP={}&Dealer=DMS&Client=DMS&SubClient=Diamond-CRMDev&product=earl' \
+                              '&JobNumber={}&ClientID={}&VendorID=DMS&DaysToSuppress=0&Radius={}&ZipCode={}'.format(visitor.ip,
+                                                                                                                    visitor.job_number,
+                                                                                                                    visitor.client_id,
+                                                                                                                    campaign.radius,
+                                                                                                                    store.zip_code)
 
-                db.session.add(appended_visitor)
-                db.session.commit()
+                        # make the M1 request
+                        r = requests.get(url, headers=hdr)
 
-                # update the visitor instance with the appended flag
-                visitor.appended = True
-                visitor.processed = True
-                db.session.commit()
-                logger.info('Visitor Appended')
-            else:
-                # update the visitor instance with the appended flag
-                visitor.appended = False
-                visitor.processed = True
-                db.session.commit()
-                logger.warning('No match on IP')
+                        # get the response and process appended visitors
+                        if r.status_code == 200:
+                            json_obj = json.loads(r.text)
+                            # print(json_obj)
 
-        elif r.status_code == 404:
-            logger.warning('M1 404 Response: Page Not Found/Data Malformed.')
-            print('M1 Returned 404:  Will retry next round...')
-        elif r.status_code == 503:
-            logger.critical('M1 503 Response:  Critical')
-            print('M1 Returned 503:  Service Unavailable')
+                            if isinstance(json_obj[0], dict) and 'FirstName' in json_obj[0]:
+                                first_name = json_obj[0]['FirstName']
+                                last_name = json_obj[0]['LastName']
+                                email = json_obj[0]['EMail']
+                                credit_range = json_obj[0]['InferredCreditScore']
+                                car_make = json_obj[0]['MAKE']
+                                state = json_obj[0]['state']
+                                city = json_obj[0]['City']
+                                zip_code = json_obj[0]['ZipCode']
+                                car_year = json_obj[0]['YEAR']
+                                car_model = json_obj[0]['MODEL']
+                                address = json_obj[0]['Address']
+                                zip4 = json_obj[0]['Zip4']
+                                phone = json_obj[0]['Cell']
+
+                                # create the appended visitor record and commit
+                                appended_visitor = AppendedVisitor(
+                                    visitor=visitor.id,
+                                    created_date=visitor.created_date,
+                                    first_name=first_name.capitalize(),
+                                    last_name=last_name.capitalize(),
+                                    email=email,
+                                    home_phone=phone,
+                                    cell_phone=phone,
+                                    address1=address,
+                                    city=city.title(),
+                                    state=state.upper(),
+                                    zip_code=zip_code,
+                                    credit_range=credit_range,
+                                    car_year=car_year,
+                                    car_model=car_model.title(),
+                                    car_make=car_make.capitalize(),
+                                    processed=False
+                                )
+
+                                db.session.add(appended_visitor)
+                                db.session.commit()
+
+                                # update the visitor instance with the appended flag
+                                visitor.appended = True
+                                visitor.processed = True
+                                db.session.commit()
+                                logger.info('Visitor Appended')
+                            else:
+                                # update the visitor instance with the appended flag
+                                visitor.appended = False
+                                visitor.processed = True
+                                db.session.commit()
+                                logger.warning('No match on IP')
+
+                        elif r.status_code == 404:
+                            logger.warning('M1 404 Response: Page Not Found/Data Malformed.')
+                            print('M1 Returned 404:  Will retry next round...')
+                        elif r.status_code == 503:
+                            logger.critical('M1 503 Response:  Critical')
+                            print('M1 Returned 503:  Service Unavailable')
+                        else:
+                            print('Did not receive a valid HTTP response code from M1.  Aborting.')
+
+                    else:
+                        logger.warning('No campaign found for client_id: {} and job_number: {}'.format(
+                            Visitor.client_id,
+                            Visitor.job_number
+                        ))
+                        print('Error:  Campaign Not Found!')
+
+                except exc.SQLAlchemyError as err:
+                    logger.warning('The database returned error: {}'.format(str(err)))
+
         else:
-            print('Did not receive a valid HTTP response code from M1.  Aborting.')
+            logger.info('No new visitors to append.  Query returned None.')
+            print('There were no records to process so I\'m going back to sleep...')
 
-
-
-
-
-
-
+    except exc.SQLAlchemyError as e:
+        print('The database returned error: {}'.format(str(e)))
