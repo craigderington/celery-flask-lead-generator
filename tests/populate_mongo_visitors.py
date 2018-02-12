@@ -23,10 +23,24 @@ user_agent_list = [
     'Googlebot/2.1 (+http://www.google.com/bot.html)',
 ]
 
-job_number_list = ['39650', '39651', '39656']
-client_id_list = ['zrx9876t4u', 'xyzTr83932', 'mnx4274tru']
-campaign_list = ['EXIT_REALTY', 'ORLANDO_NISSAN', 'PYTHON-DEV-SYSTEMS']
 ip_list = []
+client_id_job_number_list = [
+    {
+        'client_id': 'xyzTr83932',
+        'job_number': '39651',
+        'campaign': 'PYTHON-DEV-SYSTEMS'
+    },
+    {
+        'client_id': 'mnx4274tru',
+        'job_number': '39650',
+        'campaign': 'EXIT_REALTY'
+    },
+    {
+        'client_id': 'zrx9876t4u',
+        'job_number': '39656',
+        'campaign': 'ORLANDO_NISSAN'
+    }
+]
 
 
 class DateTimeEncoder(json.JSONEncoder):
@@ -64,12 +78,12 @@ def main():
             ip = row[0]
             ip_list.append(ip)
 
-    for ip_addr in ip_list[10:310]:
+    for ip_addr in ip_list[6501:10000]:
         # set variables from the lists above
         agent = random.choice(user_agent_list)
-        job_number = random.choice(job_number_list)
-        client_id = random.choice(client_id_list)
-        campaign = random.choice(campaign_list)
+        job_number = client_id_job_number_list[2]['job_number']
+        client_id = client_id_job_number_list[2]['client_id']
+        campaign = client_id_job_number_list[2]['campaign']
 
         # create the visitor event record
         event_record = {

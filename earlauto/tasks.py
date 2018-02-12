@@ -16,6 +16,9 @@ from sqlalchemy import exc
 
 logger = get_task_logger(__name__)
 
+# Open the geo data file once and store it in cache memory
+gi = GeoIP.open('/var/lib/geoip/GeoLiteCity.dat', GeoIP.GEOIP_INDEX_CACHE | GeoIP.GEOIP_CHECK_CACHE)
+
 
 def convert_datetime_object(o):
     if isinstance(o, datetime.datetime):
@@ -23,7 +26,6 @@ def convert_datetime_object(o):
 
 
 def get_location(ip_addr):
-    gi = GeoIP.open('/var/lib/geoip/GeoLiteCity.dat', GeoIP.GEOIP_INDEX_CACHE | GeoIP.GEOIP_CHECK_CACHE)
     gi_lookup = gi.record_by_addr(ip_addr)
     return gi_lookup
 
@@ -86,7 +88,7 @@ def get_new_visitors():
         sent_collection = mongodb.sent_collection
         data = sent_collection.find({'processed': 0}, {'_id': 1, 'ip': 1, 'agent': 1, 'send_hash': 1,
                                                        'job_number': 1, 'client_id': 1, 'sent_date': 1,
-                                                       'campaign_hash': 1, 'open_hash': 1, 'send_hash': 1}).limit(10)
+                                                       'campaign_hash': 1, 'open_hash': 1, 'send_hash': 1}).limit(50)
         data_count = data.count(True)
 
         # if data has new visitors to process
@@ -109,6 +111,19 @@ def get_new_visitors():
                     visitor_exists.num_visits += 1
                     visitor_exists.last_visit = datetime.datetime.now()
                     db.session.commit()
+
+                    # if the visitor already existed and te number of visits was incremented,
+                    # continue to update the processed flag for the IPs
+                    # update the processed flag in MongoDB and set to True
+                    sent_collection.update_one({'_id': m_id}, {'$set': {'processed': 1}}, True)
+                    logger.info('Visitor exists. {} has visited {} times.  Last Visit: {}'.format(
+                        visitor_exists.id,
+                        visitor_exists.num_visits,
+                        visitor_exists.last_visit
+                    ))
+
+                    # print incrementing message to the console
+                    print('Incrementing Visitor Counter!  Next >>')
 
                 # this IP and campaign_hash was not found
                 # in the database, continue to process geoip
@@ -202,23 +217,15 @@ def get_new_visitors():
 
                     # update the processed flag in MongoDB and set to True
                     sent_collection.update_one({'_id': record_id}, {'$set': {'processed': 1}}, True)
-                    logger.info('Visitor from {} created for {} for Campaign: {}. '.format(
+                    logger.info('Visitor from {} created for Store ID: {} for Campaign: {}. '.format(
                         new_visitor.ip,
                         new_visitor.store_id,
                         new_visitor.campaign_hash
                     ))
-                    print('Next...')
 
-                # if the visitor already existed and te number of visits was incremented,
-                # continue to update the processed flag for the IPs
-                # update the processed flag in MongoDB and set to True
-                sent_collection.update_one({'_id': m_id}, {'$set': {'processed': 1}}, True)
-                logger.info('Visitor exists. {} has visited {} times.  Last Visit: {}'.format(
-                    visitor_exists.id,
-                    visitor_exists.num_visits,
-                    visitor_exists.last_visit
-                ))
-                print('Incrementing Visitor Counter!  Next...')
+                    # on to the next record
+                    print('Next >>')
+
             return data_count
 
         else:
@@ -249,7 +256,7 @@ def append_visitors():
             Visitor.appended == 0,
             Visitor.country_code == 'US',
             Visitor.retry_counter < retry_value
-        )).limit(10).all()
+        )).limit(50).all()
 
         # if the query returns True
         if visitors:
