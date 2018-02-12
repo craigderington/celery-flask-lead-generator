@@ -64,7 +64,7 @@ def close_session(*args, **kwargs):
     db.session.remove()
 
 
-@celery.task()
+@celery.task(queue='get_visitors')
 def get_new_visitors():
     """
     Get the list of all unprocessed new visitors from MongoDB and set up for
@@ -232,7 +232,7 @@ def get_new_visitors():
         print('Could not connect to the Pixel Tracker MongoDB server: {}'.format(e))
 
 
-@celery.task()
+@celery.task(queue='append')
 def append_visitors():
     """
     Send Visitors to M1 for Data Append
