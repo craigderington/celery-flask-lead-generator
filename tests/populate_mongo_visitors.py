@@ -78,12 +78,12 @@ def main():
             ip = row[0]
             ip_list.append(ip)
 
-    for ip_addr in ip_list[6501:10000]:
+    for ip_addr in ip_list[100:1000]:
         # set variables from the lists above
         agent = random.choice(user_agent_list)
-        job_number = client_id_job_number_list[2]['job_number']
-        client_id = client_id_job_number_list[2]['client_id']
-        campaign = client_id_job_number_list[2]['campaign']
+        job_number = client_id_job_number_list[0]['job_number']
+        client_id = client_id_job_number_list[0]['client_id']
+        campaign = client_id_job_number_list[0]['campaign']
 
         # create the visitor event record
         event_record = {

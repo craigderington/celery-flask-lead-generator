@@ -224,7 +224,7 @@ def get_new_visitors():
                     ))
 
                     # on to the next record
-                    print('Next >>')
+                    # print('Next >>')
 
             return data_count
 
@@ -254,6 +254,7 @@ def append_visitors():
         visitors = Visitor.query.filter(and_(
             Visitor.processed == 0,
             Visitor.appended == 0,
+            Visitor.locked == 0,
             Visitor.country_code == 'US',
             Visitor.retry_counter < retry_value
         )).limit(50).all()
@@ -264,6 +265,10 @@ def append_visitors():
             for visitor in visitors:
 
                 try:
+
+                    # lock the record to prevent race conditions
+                    visitor.locked = True
+                    db.session.commit()
 
                     # get our campaign data for the M1 API call
                     campaign = Campaign.query.filter(and_(
@@ -334,6 +339,7 @@ def append_visitors():
                                 # update the visitor instance with the appended flag
                                 visitor.appended = True
                                 visitor.processed = True
+                                visitor.locked = True
                                 visitor.status = 'APPENDED'
                                 db.session.commit()
                                 logger.info('Visitor Appended: {} {} {} {} {}'.format(
@@ -344,9 +350,11 @@ def append_visitors():
                                     zip_code
                                 ))
                             else:
-                                # update the visitor instance with the appended flag
+                                # update the visitor instance with the appended flag False
+                                # and the processed flag to True.  Did not append.
                                 visitor.appended = False
                                 visitor.processed = True
+                                visitor.locked = True
                                 visitor.status = 'IPNOTFOUND'
                                 db.session.commit()
                                 logger.warning('No match on IP: {}'.format(visitor.ip))
@@ -355,6 +363,8 @@ def append_visitors():
                             visitor.retry_counter += 1
                             visitor.last_retry = datetime.datetime.now()
                             visitor.status = 'ERROR404'
+                            visitor.locked = False
+                            db.session.commit()
                             logger.warning('M1 404 Response: Page Not Found/Data Malformed.')
                             print('M1 Returned 404:  Will retry Visitor ID: {} @ IP: {} next round.'.format(
                                 visitor.id, visitor.ip
@@ -363,6 +373,8 @@ def append_visitors():
                             visitor.retry_counter += 1
                             visitor.last_retry = datetime.datetime.now()
                             visitor.status = 'ERROR503'
+                            visitor.locked = False
+                            db.session.commit()
                             logger.critical('M1 503 Response:  Critical')
                             print('M1 Returned 503:  Service Unavailable')
                         else:

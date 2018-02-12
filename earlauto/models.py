@@ -44,6 +44,7 @@ class Visitor(db.Model):
     retry_counter = Column(Integer)
     last_retry = Column(DateTime)
     status = Column(String(10))
+    locked = Column(Boolean, default=0)
 
     def __repr__(self):
         return 'From {} on {} for {}'.format(
