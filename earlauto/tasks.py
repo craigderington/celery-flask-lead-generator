@@ -10,7 +10,7 @@ from celery.signals import task_postrun
 from celery.utils.log import get_task_logger
 
 from earlauto import celery, db
-from earlauto.models import Visitor, Campaign, AppendedVisitor, Store
+from earlauto.models import Visitor, Campaign, AppendedVisitor, Store, Lead
 from sqlalchemy import and_
 from sqlalchemy import exc
 
@@ -239,7 +239,7 @@ def get_new_visitors():
         print('Could not connect to the Pixel Tracker MongoDB server: {}'.format(e))
 
 
-@celery.task(queue='append')
+@celery.task(queue='append_visitors')
 def append_visitors():
     """
     Send Visitors to M1 for Data Append
@@ -396,3 +396,147 @@ def append_visitors():
 
     except exc.SQLAlchemyError as e:
         print('The database returned error: {}'.format(str(e)))
+
+
+@celery.task(queue='create_lead')
+def create_lead():
+    """
+    Create the lead from the appended visitor data
+    :return: num_leads
+    """
+    lead_counter = 0
+
+    # get the records
+    try:
+        appended_visitors = AppendedVisitor.query.filter(
+                AppendedVisitor.processed == 0).limit(50).all()
+
+        # if we have recent appended visitors to process
+        # loop the records
+        if append_visitors:
+
+            for visitor in appended_visitors:
+
+                # create the new lead record
+                new_lead = Lead(
+                    appended_visitor_id=visitor.id,
+                    created_date=datetime.datetime.now(),
+                    email_verified=False,
+                    lead_optout=False,
+                    processed=False,
+                    followup_email=False,
+                    followup_print=False,
+                    followup_voicemail=False
+                )
+
+                db.session.add(new_lead)
+                db.session.commit()
+
+                logger.info('Lead created: {} {} Email: {} on {}'.format(
+                    visitor.first_name,
+                    visitor.last_name,
+                    visitor.email,
+                    datetime.datetime.now()
+                ))
+
+                # flag the lead as processed
+                visitor.processed = True
+                db.session.commit()
+
+                lead_counter += 1
+        else:
+            logger.info('There are no new leads to create.  Back to sleep...')
+
+        # return the number of leads created
+        return lead_counter
+
+    except exc.SQLAlchemyError as err:
+        print('A database error occurred: {}'.format(err))
+
+
+@celery.task(queue='verify_lead')
+def verify_lead():
+    """
+    Perform email validation with Kickbox
+    :return: verified email
+    """
+    # https://api.kickbox.io/v2/verify?email=' + lead.email + '&apikey=' + kickbox_api_key
+    lead_counter = 0
+    kickbox_api_key = 'test_b2a8972a20c5dafd8b08f6b1ebb323d6660db597fc8fde74e247af7e03776e19'
+    kickbox_base_url = 'https://api.kickbox.io/v2/verify?email='
+
+    hdr = {
+        'user-agent': 'EARL Automation Server v.01',
+        'content-type': 'application/json'
+    }
+
+    try:
+
+        # get our leads to process and verify
+        leads = Lead.query.filter(
+            Lead.processed == 0,
+            Lead.lead_optout == 0,
+            Lead.email_verified == 0,
+            Lead.followup_email == 0
+        ).limit(50).all()
+
+        for lead in leads:
+
+            try:
+
+                visitor_data = AppendedVisitor.query.filter(
+                    AppendedVisitor.id == lead.appended_visitor_id
+                ).one()
+
+                if visitor_data:
+
+                    if visitor_data.email:
+
+                        # set up the remaining part of the url string
+                        email_url = visitor_data.email + '&apikey=' + kickbox_api_key
+
+                        # call Kickbox Service to verify the email
+                        r = requests.get(kickbox_base_url + email_url, headers=hdr)
+
+                        # if we have a good HTTP status
+                        if r.status_code == 200:
+
+                            # set our response variable
+                            kickbox_response = r.json()
+
+                            if 'deliverable' in kickbox_response['result']:
+
+                                # update and mark the lead processed
+                                lead.email_verified = True
+                                lead.processed = True
+                                db.session.commit()
+
+                            else:
+                                # lead email is undeliverable
+                                # update and mark the lead processed
+                                lead.email_verified = False
+                                lead.processed = True
+                                db.session.commit()
+
+                    # the lead has no usable email address
+                    # send to web scraping, maybe in another process
+                    else:
+                        lead.email_verified = True
+                        lead.processed = True
+                        db.session.commit()
+
+                # update the lead counter for our return value
+                lead_counter += 1
+
+            # we got a database error
+            except exc.SQLAlchemyError as db_err:
+                print('Database returned error: {}'.format(db_err))
+                logger.critical('Database error, aborting process...')
+
+        # the return value for the celery console
+        # this is always the return value of the task
+        return lead_counter
+
+    except exc.SQLAlchemyError as db_err:
+        print('Database returned error: {}'.format(db_err))
+        logger.critical('Database error, aborting process...')
