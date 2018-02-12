@@ -398,7 +398,7 @@ def append_visitors():
         print('The database returned error: {}'.format(str(e)))
 
 
-@celery.task(queue='create_lead')
+@celery.task(queue='create_leads')
 def create_lead():
     """
     Create the lead from the appended visitor data
@@ -454,7 +454,7 @@ def create_lead():
         print('A database error occurred: {}'.format(err))
 
 
-@celery.task(queue='verify_lead')
+@celery.task(queue='verify_leads')
 def verify_lead():
     """
     Perform email validation with Kickbox
