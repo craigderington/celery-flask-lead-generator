@@ -8,7 +8,8 @@ import GeoIP
 import requests
 from celery.signals import task_postrun
 from celery.utils.log import get_task_logger
-
+from celery.task.control import revoke
+from celery import current_task
 from earlauto import celery, db
 from earlauto.models import Visitor, Campaign, AppendedVisitor, Store, Lead
 from sqlalchemy import and_
@@ -88,7 +89,7 @@ def get_new_visitors():
         sent_collection = mongodb.sent_collection
         data = sent_collection.find({'processed': 0}, {'_id': 1, 'ip': 1, 'agent': 1, 'send_hash': 1,
                                                        'job_number': 1, 'client_id': 1, 'sent_date': 1,
-                                                       'campaign_hash': 1, 'open_hash': 1, 'send_hash': 1}).limit(50)
+                                                       'campaign_hash': 1, 'open_hash': 1, 'send_hash': 1}).limit(100)
         data_count = data.count(True)
 
         # if data has new visitors to process
@@ -223,8 +224,8 @@ def get_new_visitors():
                         new_visitor.campaign_hash
                     ))
 
-                    # on to the next record
-                    # print('Next >>')
+                    # on to the next task
+                    append_visitors.delay(new_visitor.id)
 
             return data_count
 
@@ -239,213 +240,257 @@ def get_new_visitors():
         print('Could not connect to the Pixel Tracker MongoDB server: {}'.format(e))
 
 
-@celery.task(queue='append_visitors')
-def append_visitors():
+@celery.task(queue='append_visitors', bind=True, max_retries=3)
+def append_visitors(new_visitor_id):
     """
     Send Visitors to M1 for Data Append
+    :arg new_visitor_id
     :return: json
     """
     # create request headers
-    hdr = {'user-agent': 'EARL Automation Server', 'content-type': 'application/json'}
+    hdr = {'user-agent': 'EARL Automation Server v.01', 'content-type': 'application/json'}
     retry_value = 3
 
     try:
 
-        visitors = Visitor.query.filter(and_(
-            Visitor.processed == 0,
-            Visitor.appended == 0,
-            Visitor.locked == 0,
-            Visitor.country_code == 'US',
-            Visitor.retry_counter < retry_value
-        )).limit(50).all()
+        # get the visitor by the ID passed in the previous task
+        get_visitor = Visitor.query.filter(
+            Visitor.id == new_visitor_id
+        ).one()
 
         # if the query returns True
-        if visitors:
+        if get_visitor:
 
-            for visitor in visitors:
+            # assign the current task ID so we have some task control options
+            task_id = current_task.request.id
 
-                try:
+            # run through our local checks and make sure this
+            # is a visitor record we want to append
+            if get_visitor.retry_counter < retry_value:
 
-                    # lock the record to prevent race conditions
-                    visitor.locked = True
-                    db.session.commit()
+                if 'US' in get_visitor.country_code.strip():
 
-                    # get our campaign data for the M1 API call
-                    campaign = Campaign.query.filter(and_(
-                        Campaign.client_id == visitor.client_id,
-                        Campaign.job_number == visitor.job_number
-                    )).first()
+                    if not get_visitor.appended:
 
-                    if campaign:
+                        try:
+                            # get our campaign data for the M1 API call
+                            campaign = Campaign.query.filter(and_(
+                                Campaign.client_id == get_visitor.client_id,
+                                Campaign.job_number == get_visitor.job_number
+                            )).first()
 
-                        # we also need the store's zip code
-                        store = Store.query.filter(
-                            Store.id == campaign.store_id
-                        ).first()
+                            if campaign:
 
-                        url = 'https://datamatchapi.com/DMSApi/GetDmsApiData?IP={}&Dealer=DMS&Client=DMS&SubClient=Diamond-CRMDev&product=earl' \
-                              '&JobNumber={}&ClientID={}&VendorID=DMS&DaysToSuppress=0&Radius={}&ZipCode={}'.format(visitor.ip,
-                                                                                                                    visitor.job_number,
-                                                                                                                    visitor.client_id,
-                                                                                                                    campaign.radius,
-                                                                                                                    store.zip_code)
+                                # we also need the store's zip code
+                                store = Store.query.filter(
+                                    Store.id == campaign.store_id
+                                ).first()
 
-                        # make the M1 request
-                        r = requests.get(url, headers=hdr)
+                                url = 'https://datamatchapi.com/DMSApi/GetDmsApiData?IP={}&Dealer=DMS&Client=DMS' \
+                                      '&SubClient=Diamond-CRMDev&product=earl' \
+                                      '&JobNumber={}&ClientID={}&VendorID=DMS&DaysToSuppress=0&Radius={}&ZipCode={}'\
+                                    .format(
+                                        get_visitor.ip,
+                                        get_visitor.job_number,
+                                        get_visitor.client_id,
+                                        campaign.radius,
+                                        store.zip_code
+                                    )
 
-                        # get the response and process appended visitors
-                        if r.status_code == 200:
-                            json_obj = json.loads(r.text)
-                            # print(json_obj)
+                                # make the M1 request
+                                r = requests.get(url, headers=hdr)
 
-                            if isinstance(json_obj[0], dict) and 'FirstName' in json_obj[0]:
-                                first_name = json_obj[0]['FirstName']
-                                last_name = json_obj[0]['LastName']
-                                email = json_obj[0]['EMail']
-                                credit_range = json_obj[0]['InferredCreditScore']
-                                car_make = json_obj[0]['MAKE']
-                                state = json_obj[0]['state']
-                                city = json_obj[0]['City']
-                                zip_code = json_obj[0]['ZipCode']
-                                car_year = json_obj[0]['YEAR']
-                                car_model = json_obj[0]['MODEL']
-                                address = json_obj[0]['Address']
-                                zip4 = json_obj[0]['Zip4']
-                                phone = json_obj[0]['Cell']
+                                # get the response and process appended visitors
+                                if r.status_code == 200:
+                                    json_obj = json.loads(r.text)
+                                    # print(json_obj)
 
-                                # create the appended visitor record and commit
-                                appended_visitor = AppendedVisitor(
-                                    visitor=visitor.id,
-                                    created_date=visitor.created_date,
-                                    first_name=first_name.capitalize(),
-                                    last_name=last_name.capitalize(),
-                                    email=email,
-                                    home_phone=phone,
-                                    cell_phone=phone,
-                                    address1=address,
-                                    city=city.title(),
-                                    state=state.upper(),
-                                    zip_code=zip_code,
-                                    credit_range=credit_range,
-                                    car_year=car_year,
-                                    car_model=car_model.title(),
-                                    car_make=car_make.capitalize(),
-                                    processed=False
-                                )
+                                    if isinstance(json_obj[0], dict) and 'FirstName' in json_obj[0]:
+                                        first_name = json_obj[0]['FirstName']
+                                        last_name = json_obj[0]['LastName']
+                                        email = json_obj[0]['EMail']
+                                        credit_range = json_obj[0]['InferredCreditScore']
+                                        car_make = json_obj[0]['MAKE']
+                                        state = json_obj[0]['state']
+                                        city = json_obj[0]['City']
+                                        zip_code = json_obj[0]['ZipCode']
+                                        car_year = json_obj[0]['YEAR']
+                                        car_model = json_obj[0]['MODEL']
+                                        address = json_obj[0]['Address']
+                                        zip4 = json_obj[0]['Zip4']
+                                        phone = json_obj[0]['Cell']
 
-                                db.session.add(appended_visitor)
-                                db.session.commit()
+                                        # create the appended visitor record and commit
+                                        appended_visitor = AppendedVisitor(
+                                            visitor=get_visitor.id,
+                                            created_date=get_visitor.created_date,
+                                            first_name=first_name.capitalize(),
+                                            last_name=last_name.capitalize(),
+                                            email=email,
+                                            home_phone=phone,
+                                            cell_phone=phone,
+                                            address1=address,
+                                            city=city.title(),
+                                            state=state.upper(),
+                                            zip_code=zip_code,
+                                            credit_range=credit_range,
+                                            car_year=car_year,
+                                            car_model=car_model.title(),
+                                            car_make=car_make.capitalize(),
+                                            processed=False
+                                        )
 
-                                # update the visitor instance with the appended flag
-                                visitor.appended = True
-                                visitor.processed = True
-                                visitor.locked = True
-                                visitor.status = 'APPENDED'
-                                db.session.commit()
-                                logger.info('Visitor Appended: {} {} {} {} {}'.format(
-                                    first_name.title(),
-                                    last_name.title(),
-                                    city.title(),
-                                    state.upper(),
-                                    zip_code
-                                ))
+                                        db.session.add(appended_visitor)
+                                        db.session.commit()
+
+                                        # update the visitor instance with the appended flag
+                                        get_visitor.appended = True
+                                        get_visitor.processed = True
+                                        get_visitor.locked = True
+                                        get_visitor.status = 'APPENDED'
+                                        db.session.commit()
+                                        logger.info('Visitor Appended: {} {} {} {} {}'.format(
+                                            first_name.title(),
+                                            last_name.title(),
+                                            city.title(),
+                                            state.upper(),
+                                            zip_code
+                                        ))
+
+                                        # call the next task in the workflow
+                                        create_lead.delay(appended_visitor.id)
+                                    else:
+                                        # update the visitor instance with the appended flag False
+                                        # and the processed flag to True.  Did not append.
+                                        get_visitor.appended = False
+                                        get_visitor.processed = True
+                                        get_visitor.locked = True
+                                        get_visitor.status = 'IPNOTFOUND'
+                                        db.session.commit()
+                                        logger.warning('No match on IP: {}'.format(get_visitor.ip))
+
+                                elif r.status_code == 404:
+                                    get_visitor.retry_counter += 1
+                                    get_visitor.last_retry = datetime.datetime.now()
+                                    get_visitor.status = 'ERROR404'
+                                    get_visitor.locked = False
+                                    db.session.commit()
+                                    logger.warning('M1 404 Response: Page Not Found/Data Malformed.')
+                                    print('M1 Returned 404:  Will retry Visitor ID: {} @ IP: {} next round.'.format(
+                                        get_visitor.id, get_visitor.ip
+                                    ))
+                                elif r.status_code == 503:
+                                    get_visitor.retry_counter += 1
+                                    get_visitor.last_retry = datetime.datetime.now()
+                                    get_visitor.status = 'ERROR503'
+                                    get_visitor.locked = False
+                                    db.session.commit()
+                                    logger.critical('M1 503 Response:  Critical')
+                                    print('M1 Returned 503:  Service Unavailable')
+                                else:
+                                    print('Did not receive a valid HTTP response code from M1.  Aborting.')
+
+                                    # revoke the task
+                                    revoke(task_id, terminate=True)
+
                             else:
-                                # update the visitor instance with the appended flag False
-                                # and the processed flag to True.  Did not append.
-                                visitor.appended = False
-                                visitor.processed = True
-                                visitor.locked = True
-                                visitor.status = 'IPNOTFOUND'
-                                db.session.commit()
-                                logger.warning('No match on IP: {}'.format(visitor.ip))
+                                logger.warning('No campaign found for client_id: {} and job_number: {}'.format(
+                                    get_visitor.client_id,
+                                    get_visitor.job_number
+                                ))
+                                print('Error:  Campaign Not Found!')
 
-                        elif r.status_code == 404:
-                            visitor.retry_counter += 1
-                            visitor.last_retry = datetime.datetime.now()
-                            visitor.status = 'ERROR404'
-                            visitor.locked = False
-                            db.session.commit()
-                            logger.warning('M1 404 Response: Page Not Found/Data Malformed.')
-                            print('M1 Returned 404:  Will retry Visitor ID: {} @ IP: {} next round.'.format(
-                                visitor.id, visitor.ip
-                            ))
-                        elif r.status_code == 503:
-                            visitor.retry_counter += 1
-                            visitor.last_retry = datetime.datetime.now()
-                            visitor.status = 'ERROR503'
-                            visitor.locked = False
-                            db.session.commit()
-                            logger.critical('M1 503 Response:  Critical')
-                            print('M1 Returned 503:  Service Unavailable')
-                        else:
-                            print('Did not receive a valid HTTP response code from M1.  Aborting.')
+                                # revoke the task
+                                revoke(task_id, terminate=True)
+
+                        except exc.SQLAlchemyError as err:
+                            logger.warning('The database returned error: {}'.format(str(err)))
 
                     else:
-                        logger.warning('No campaign found for client_id: {} and job_number: {}'.format(
-                            Visitor.client_id,
-                            Visitor.job_number
-                        ))
-                        print('Error:  Campaign Not Found!')
+                        # the visitor record appears to already be appended, or appended is True
+                        logger.info('Visitor ID: {} is already appended.  Task aborted!')
 
-                except exc.SQLAlchemyError as err:
-                    logger.warning('The database returned error: {}'.format(str(err)))
+                        # revoke the task
+                        revoke(task_id, terminate=True)
+
+                else:
+                    # this visitor record is not in the united states
+                    logger.info('Visitor ID: {} geo-located outside the U.S.  Task aborted.'.format(
+                        get_visitor.id
+                    ))
+
+                    # revoke the task
+                    revoke(task_id, terminate=True)
+
+            else:
+                # retry ceiling exceeded
+                logger.info('Visitor ID: {} has exceeded the M1 appended retryn ceiling.  Task aborted!'.format(
+                    get_visitor.id
+                ))
+
+                # revoke the task
+                revoke(task_id, terminate=True)
 
         else:
-            logger.info('No new visitors to append.  Query returned None.')
+            logger.info('Visitor ID: {} not found.  Query returned None.  Task aborted!')
             print('There were no records to process so I\'m going back to sleep...')
 
     except exc.SQLAlchemyError as e:
         print('The database returned error: {}'.format(str(e)))
 
 
-@celery.task(queue='create_leads')
-def create_lead():
+@celery.task(queue='create_leads', bind=True, max_retries=3)
+def create_lead(appended_visitor_id):
     """
     Create the lead from the appended visitor data
     :return: num_leads
     """
+
+    visitor_id = appended_visitor_id
+    task_id = celery.current_task.request.id
     lead_counter = 0
 
     # get the records
     try:
-        appended_visitors = AppendedVisitor.query.filter(
-                AppendedVisitor.processed == 0).limit(50).all()
+        appended_visitor = AppendedVisitor.query.filter(
+            AppendedVisitor.id == visitor_id
+        ).one()
 
-        # if we have recent appended visitors to process
-        # loop the records
-        if append_visitors:
+        if appended_visitor:
 
-            for visitor in appended_visitors:
+            # create the new lead record
+            new_lead = Lead(
+                appended_visitor_id=appended_visitor.id,
+                created_date=datetime.datetime.now(),
+                email_verified=False,
+                lead_optout=False,
+                processed=False,
+                followup_email=False,
+                followup_print=False,
+                followup_voicemail=False
+            )
 
-                # create the new lead record
-                new_lead = Lead(
-                    appended_visitor_id=visitor.id,
-                    created_date=datetime.datetime.now(),
-                    email_verified=False,
-                    lead_optout=False,
-                    processed=False,
-                    followup_email=False,
-                    followup_print=False,
-                    followup_voicemail=False
-                )
+            db.session.add(new_lead)
+            db.session.commit()
 
-                db.session.add(new_lead)
-                db.session.commit()
+            logger.info('Lead created: {} {} Email: {} on {}'.format(
+                appended_visitor.first_name,
+                appended_visitor.last_name,
+                appended_visitor.email,
+                datetime.datetime.now()
+            ))
 
-                logger.info('Lead created: {} {} Email: {} on {}'.format(
-                    visitor.first_name,
-                    visitor.last_name,
-                    visitor.email,
-                    datetime.datetime.now()
-                ))
+            # flag the lead as processed
+            appended_visitor.processed = True
+            db.session.commit()
 
-                # flag the lead as processed
-                visitor.processed = True
-                db.session.commit()
+            # call the next task, verify lead with service
+            verify_lead.delay(new_lead.id)
+            lead_counter += 1
 
-                lead_counter += 1
         else:
-            logger.info('There are no new leads to create.  Back to sleep...')
+            logger.info('Appended Visitor: {} was not found in the database.  Task aborted')
+            revoke(task_id, terminate=True)
 
         # return the number of leads created
         return lead_counter
