@@ -14,7 +14,10 @@ from earlauto import celery, db
 from earlauto.models import Visitor, Campaign, AppendedVisitor, Store, Lead
 from sqlalchemy import and_
 from sqlalchemy import exc
+from sqlalchemy import text
+from flask_mail import Message
 
+# set up our logger utility
 logger = get_task_logger(__name__)
 
 # Open the geo data file once and store it in cache memory
@@ -77,7 +80,7 @@ def get_new_visitors():
 
     # set date vars
     current_time = datetime.datetime.now()
-    one_day_ago = current_time - datetime.timedelta(hours=1)
+    one_day_ago = current_time - datetime.timedelta(hours=24)
 
     # connect to MongoDB
     try:
@@ -225,7 +228,7 @@ def get_new_visitors():
                     ))
 
                     # on to the next task
-                    append_visitors.delay(new_visitor.id)
+                    append_visitor.delay(new_visitor.id)
 
             return data_count
 
@@ -240,16 +243,23 @@ def get_new_visitors():
         print('Could not connect to the Pixel Tracker MongoDB server: {}'.format(e))
 
 
-@celery.task(queue='append_visitors', bind=True, max_retries=3)
-def append_visitors(new_visitor_id):
+@celery.task(queue='append_visitors', max_retries=3)
+def append_visitor(new_visitor_id):
     """
     Send Visitors to M1 for Data Append
     :arg new_visitor_id
     :return: json
     """
+
     # create request headers
     hdr = {'user-agent': 'EARL Automation Server v.01', 'content-type': 'application/json'}
     retry_value = 3
+
+    # assign the current task ID so we have some task control options
+    task_id = celery.current_task.request.id
+
+    if not isinstance(new_visitor_id, int):
+        new_visitor_id = int(new_visitor_id)
 
     try:
 
@@ -260,9 +270,6 @@ def append_visitors(new_visitor_id):
 
         # if the query returns True
         if get_visitor:
-
-            # assign the current task ID so we have some task control options
-            task_id = current_task.request.id
 
             # run through our local checks and make sure this
             # is a visitor record we want to append
@@ -357,8 +364,9 @@ def append_visitors(new_visitor_id):
                                             zip_code
                                         ))
 
-                                        # call the next task in the workflow
+                                        # call the next task in the EARL workflow
                                         create_lead.delay(appended_visitor.id)
+
                                     else:
                                         # update the visitor instance with the appended flag False
                                         # and the processed flag to True.  Did not append.
@@ -439,7 +447,7 @@ def append_visitors(new_visitor_id):
         print('The database returned error: {}'.format(str(e)))
 
 
-@celery.task(queue='create_leads', bind=True, max_retries=3)
+@celery.task(queue='create_leads', max_retries=3)
 def create_lead(appended_visitor_id):
     """
     Create the lead from the appended visitor data
@@ -449,6 +457,9 @@ def create_lead(appended_visitor_id):
     visitor_id = appended_visitor_id
     task_id = celery.current_task.request.id
     lead_counter = 0
+
+    if not isinstance(visitor_id, int):
+        visitor_id = int(appended_visitor_id)
 
     # get the records
     try:
@@ -484,7 +495,7 @@ def create_lead(appended_visitor_id):
             appended_visitor.processed = True
             db.session.commit()
 
-            # call the next task, verify lead with service
+            # call the next task, verify lead with Kickbox service
             verify_lead.delay(new_lead.id)
             lead_counter += 1
 
@@ -499,13 +510,15 @@ def create_lead(appended_visitor_id):
         print('A database error occurred: {}'.format(err))
 
 
-@celery.task(queue='verify_leads')
-def verify_lead():
+@celery.task(queue='verify_leads', max_retries=3)
+def verify_lead(new_lead_id):
     """
     Perform email validation with Kickbox
     :return: verified email
     """
     # https://api.kickbox.io/v2/verify?email=' + lead.email + '&apikey=' + kickbox_api_key
+    newleadid = new_lead_id
+    task_id = celery.current_task.request.id
     lead_counter = 0
     kickbox_api_key = 'test_b2a8972a20c5dafd8b08f6b1ebb323d6660db597fc8fde74e247af7e03776e19'
     kickbox_base_url = 'https://api.kickbox.io/v2/verify?email='
@@ -515,22 +528,49 @@ def verify_lead():
         'content-type': 'application/json'
     }
 
+    if not isinstance(newleadid, int):
+        newleadid = int(new_lead_id)
+
     try:
 
         # get our leads to process and verify
-        leads = Lead.query.filter(
-            Lead.processed == 0,
-            Lead.lead_optout == 0,
-            Lead.email_verified == 0,
-            Lead.followup_email == 0
-        ).limit(50).all()
+        newlead = Lead.query.filter(
+            Lead.id == newleadid
+        ).one()
 
-        for lead in leads:
+        if newlead.processed:
+
+            # the task should not have been created
+            logger.info('The lead has already been processed.  Task aborted!')
+            revoke(task_id, terminate=True)
+
+        elif newlead.leadoptout:
+
+            # lead has already opted out
+            # no need to verify this email
+            logger.info('The lead email has already been opted-out.  Task aborted!')
+            revoke(task_id, terminate=True)
+
+        elif newlead.email_verfified:
+
+            # the email address has already been verified
+            logger.info('The lead email has already been verified.  Task aborted!')
+            revoke(task_id, terminate=True)
+
+        elif newlead.followup_email:
+
+            # the email has been verified
+            # the follow up email sent
+            # why is this task even here
+            logger.info('The lead follow up email has already been sent.  Task aborted!')
+            revoke(task_id, terminate=True)
+
+        else:
 
             try:
 
                 visitor_data = AppendedVisitor.query.filter(
-                    AppendedVisitor.id == lead.appended_visitor_id
+                    AppendedVisitor.id == newlead.appended_visitor_id
                 ).one()
 
                 if visitor_data:
@@ -552,23 +592,30 @@ def verify_lead():
                             if 'deliverable' in kickbox_response['result']:
 
                                 # update and mark the lead processed
-                                lead.email_verified = True
-                                lead.processed = True
+                                newlead.email_verified = True
+                                newlead.processed = True
                                 db.session.commit()
+
+                                # call the next task in the process
+                                send_lead_to_dealer(newlead.id)
 
                             else:
                                 # lead email is undeliverable
                                 # update and mark the lead processed
-                                lead.email_verified = False
-                                lead.processed = True
+                                newlead.email_verified = False
+                                newlead.processed = True
                                 db.session.commit()
 
                     # the lead has no usable email address
                     # send to web scraping, maybe in another process
                     else:
-                        lead.email_verified = True
-                        lead.processed = True
+                        newlead.email_verified = True
+                        newlead.processed = True
                         db.session.commit()
+
+                # log no visitor found for this lead record
+                logger.info('The visitor query returned None.  The visitor attached to '
+                            'Lead ID: {} not found.  Task aborted!'.format(newlead.id))
 
                 # update the lead counter for our return value
                 lead_counter += 1
@@ -585,3 +632,210 @@ def verify_lead():
     except exc.SQLAlchemyError as db_err:
         print('Database returned error: {}'.format(db_err))
         logger.critical('Database error, aborting process...')
+
+
+@celery.task(queue='send_leads', max_retries=3)
+def send_lead_to_dealer(lead_id):
+    """
+    Send the New Qualified Lead to the Dealer
+    :param lead_id:
+    :return: MG response
+    """
+
+    task_id = celery.current_task.request.id
+    mailgun_url = 'https://api.mailgun.net/v3/{domain}/messages'
+    mailgun_sandbox_url = 'https://api.mailgun.net/v3/sandbox3b609311624841c0bb2f9154e41e34de.mailgun.org/messages'
+    mailgun_apikey = 'key-dfd370f4412eaccce27394f7bceaee0e'
+
+    if not isinstance(lead_id, int):
+        lead_id = int(lead_id)
+
+    try:
+        # get our lead
+        lead = Lead.query.filter(and_(
+            Lead.id == lead_id,
+            Lead.followup_email == 0
+        ))
+
+        if lead:
+
+            # do some raw sql to get the store notifivcation email and the campaign name
+            sql = text('select l.id, c.id, c.name, s.id as store_id, s.notification_email, av.*, from leads l, '
+                       'campaigns c, stores s, appendedvisitors av, visitors v where l.appended_visitor_id = av.id '
+                       'and av.visitor = v.id and v.store_id = s.id and v.campaign_id = c.id where l.id = {}'.format(lead.id))
+
+            # we have a good result
+            result = db.engine.execute(sql)
+
+            if result.notification_email and result.name:
+
+                payload = {
+                    'from': 'New Visitor <mail.earlbdc.com>',
+                    'to:': result.notification_email,
+                    'cc': 'earl-email-validation@contactdms.com',
+                    'subject': result.name,
+                    'html': '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/> <meta http-equiv="X-UA-Compatible" content="IE=edge"/> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title></title> <style type="text/css">@media screen and (max-width: 400px){.two-column .column, .three-column .column{max-width: 100% !important;}.two-column img{max-width: 100% !important;}.three-column img{max-width: 50% !important;}}@media screen and (min-width: 401px) and (max-width: 620px){.three-column .column{max-width: 33% !important;}.two-column .column{max-width: 50% !important;}}</style><!--[if (gte mso 9)|(IE)]> <style type="text/css"> table{border-collapse: collapse !important !important;}</style><![endif]--></head><body style="margin-top:0 !important;margin-bottom:0 !important;margin-right:0 !important;margin-left:0 !important;padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;background-color:#ffffff;" ><center class="wrapper" style="width:100%;table-layout:fixed;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;" ><!--[if (gte mso 9)|(IE)]><table width="600" align="center" style="border-spacing:0;font-family:sans-serif;color:#333333;" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;" ><![endif]--><table class="outer" align="center" style="border-spacing:0;font-family:sans-serif;color:#333333;Margin:0 auto;width:100%;max-width:600px;" cellpadding="0" cellspacing="0" border="0"><tr> <td class="full-width-image" style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;" ><table align="center" style="text-align: left; border: 1px solid black; width: 100%; margin-top: 25px;"><tr style="text-align: center;"><td>' + '<b>' + '</b>' + '</td></tr><tr><td> <b>First Name:</b> ' + result.first_name + '</td><td> <b>Last Name: </b>' + result.last_name + '</td></tr><tr><td> <b>Email:</b> ' + result.email + '</td><td> <b>Phone Number: </b>' + result.cell_phone + '</td></tr><tr> <b>Street Address: </b>' + result.address1 + '</td><td> <b>City:</b> ' + result.city + '</td><td> <b>State:</b> ' + result.state + ' </td><td><b>Zip Code:</b> ' + result.zip_code + '</td></tr><tr><td> <b>Credit Range:</b> ' + result.credit_range + '</td></tr><tr><td> <b>Auto Year: </b>' + result.car_year + '</td><td><b> Auto Make: </b>' + result.car_make + '</td><td><b> Auto Model: </b>' + result.car_model + '</td></tr><tr><td><b> Campaign: </b>' + result.name + '</td></tr></table></td></tr></table></center></body></html>',
+                    'o:tracking': 'False',
+                }
+
+                # call mailgun and post the data payload
+                r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_apikey), data=payload)
+
+                # we have a good HTTP response
+                if r.status_code == 200:
+                    mg_response = r.json()
+
+                    if 'id' in mg_response:
+                        lead.sent_to_dealer = True
+                        lead.email_receipt_id = mg_response['id']
+                        lead.email_validation_message = mg_response['message']
+                        db.session.commit()
+
+                        # call the next task in the workflow
+                        send_auto_adf_lead.delay(lead.id)
+                        send_followup_email.delay(lead.id)
+
+                # we did not get a valid HTTP response
+                else:
+                    # do we want to continue to re-try this task
+                    lead.sent_to_dealer = False
+                    lead.email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
+                    lead.email_validation_message = 'NOT SENT'
+
+        else:
+            # no lead id matching the query
+            logger.info('Lead ID: {} not found.  Task aborted!'.format(lead_id))
+            revoke(task_id, terminate=True)
+
+    except exc.SQLAlchemyError as err:
+        logger.info('Database error has occurred.   Task will automatically be re-tried 3 times.')
+
+
+@celery.task(queue='send_adfs', max_retries=3)
+def send_auto_adf_lead(lead_id):
+    """
+    Send the ADF for Dealers using this feature
+    :param lead_id:
+    :return: lead_id
+    """
+
+    task_id = celery.current_task.request.id
+    mailgun_sandbox_url = ''
+    mailgun_api_key = ''
+
+    if not isinstance(lead_id, int):
+        lead_id = int(lead_id)
+
+
+    try:
+        # get our lead
+        lead = Lead.query.filter(
+            Lead.id == lead_id
+        )
+
+        if lead:
+            # do some raw sql to get the store notifivcation email and the campaign name
+            sql = text(
+                'select l.id, c.id, c.name, c.campaign_type, s.id as store_id, s.name as store_name, s.adf_email, av.*, '
+                'from leads l, campaigns c, stores s, appendedvisitors av, visitors v where l.appended_visitor_id = av.id '
+                'and av.visitor = v.id and v.store_id = s.id and v.campaign_id = c.id where l.id = {}'.format(lead.id)
+            )
+
+            # we have a good result
+            result = db.engine.execute(sql)
+
+            if result:
+
+                if result.adf_email:
+
+                    # create the payload
+                    payload = {
+                        'from': 'ADF Lead <mail@mail.earlbdc.com>',
+                        'to': result.adf_email,
+                        'cc': 'earl-email-validation@contactdms.com',
+                        'subject': result.store_name + ' ' + result.campaign_type + ' DMS XML Lead',
+                        'text': '<?xml version="1.0" encoding="UTF-8"?>' +
+                        '<?ADF VERSION="1.0"?>' +
+                        '<adf>' +
+                        '<prospect>' +
+                        '<requestdate>' + datetime.datetime.now('%c') + '</requestdate>' +
+                        '<vehicle interest="trade-in" status="used">' +
+                        '<id sequence="1" source="' + result.store_name + ' ' + result.campaign_type + ' DMS"></id>' +
+                        '<year>' + result.car_year + '</year>' +
+                        '<make>' + result.car_make + '</make>' +
+                        '<model>' + result.car_model + '</model>' +
+                        '</vehicle>' +
+                        '<customer>' +
+                        '<contact>' +
+                        '<name part="full">' + result.first_name + ' ' + result.last_name + '</name>' +
+                        '<address type="home">' +
+                        '<street>' + result.address.address_1 + '</street>' +
+                        '<city>' + result.address.city + '</city>' +
+                        '<regioncode>' + result.address.state + '</regioncode>' +
+                        '<postalcode>' + result.address.zip_code + '</postalcode>' +
+                        '</address>' +
+                        '<email>' + result.email + '</email>' +
+                        '<phone>' + result.cell_phone + '</phone>' +
+                        '</contact>' +
+                        '<comments>Estimated Credit: ' + result.credit_range + '</comments>' +
+                        '</customer>' +
+                        '<vendor>' +
+                        '<id source="' + result.store_name + ' DMS">' + result.store_name + ' ' + result.campaign_type + ' DMS</id>' +
+                        '<vendorname>' + result.store_name + '</vendorname>' +
+                        '<contact>' +
+                        '<name part="full">' + result.store_name + '</name>' +
+                        '</contact>' +
+                        '</vendor>' +
+                        '<provider>' +
+                        '<name part="full">' + result.store_name + ' ' + result.campaign_type + ' DMS</name>' +
+                        '<service>' + result.store_name + ' ' + result.campaign_type + ' DMS</service>' +
+                        '<url>None</url>' +
+                        '</provider>' +
+                        '<leadtype>digital plus</leadtype>' +
+                        '</prospect>' +
+                        '</adf>',
+                        "o:tag": 'ADF CRM email',
+                        "o:tracking": 'False',
+                    }
+
+                    # call M1 and send the email as plan ascii text
+                    r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_api_key), data=payload)
+
+                    # check the response code
+                    if r.status_code == 200:
+
+                        # assign the reponse a variable
+                        mg_response = r.json()
+
+                        if 'id' in mg_response:
+                            lead.sent_adf = True
+                            lead.adf_email_receipt_id = mg_response['id']
+                            lead.adf_email_validation_message = mg_response['message']
+                            db.session.commit()
+
+                        # we did not get a valid HTTP response
+                    else:
+                        # do we want to continue to re-try this task
+                        lead.sent_adf = False
+                        lead.adf_email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
+                        lead.adf_email_validation_message = 'NOT SENT'
+
+                # the store does not have an adf email configured.  can not send
+                else:
+                    logger.info('Store ID: {} has no ADF email configured.  Task aborted'.format(result.store_id))
+            # the query on the lead details returned None
+            else:
+                logger.info('Unable to retrieve lead details for Lead ID: {}.  Task aborted'.format(lead.id))
+
+        # the database can not find this record
+        else:
+            logger.info('Lead ID: {} was not found.  Task aborted!'.format(lead_id))
+
+    # oh, no, we have a serious problem now
+    except exc.SQLAlchemyError as err:
+        logger.critical('Database error {} occurred.  Task aborted!'.format(err))
+
+
+@celery.task(queue='send_followups', max_retries=3)
+def send_followup_email(lead_id):
+    pass

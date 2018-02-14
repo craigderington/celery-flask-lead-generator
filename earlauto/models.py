@@ -105,6 +105,9 @@ class Lead(db.Model):
     followup_email = Column(Boolean, default=False)
     followup_voicemail = Column(Boolean, default=False)
     followup_print = Column(Boolean, default=False)
+    email_receipt_id = Column(String(255))
+    sent_to_dealer = Column(Boolean, default=False)
+    email_validation_message = Column(String(50))
 
     def __repr__(self):
         return '{}'.format(

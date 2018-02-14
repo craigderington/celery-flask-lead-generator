@@ -1,7 +1,7 @@
 from celery import Celery
 from celery.schedules import crontab
 from earlauto import create_app
-from earlauto.tasks import log, get_new_visitors, append_visitors, create_lead, verify_lead
+from earlauto.tasks import log, get_new_visitors
 
 
 def create_celery(app):
