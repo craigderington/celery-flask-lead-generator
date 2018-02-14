@@ -108,6 +108,9 @@ class Lead(db.Model):
     email_receipt_id = Column(String(255))
     sent_to_dealer = Column(Boolean, default=False)
     email_validation_message = Column(String(50))
+    sent_adf = Column(Boolean, default=False)
+    adf_email_receipt_id = Column(String(255))
+    adf_email_validation_message = Column(String(50))
 
     def __repr__(self):
         return '{}'.format(
