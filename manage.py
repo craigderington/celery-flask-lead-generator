@@ -1,11 +1,21 @@
 import sys
 import os
-
 from click import echo
-
+from flask_mail import Mail
 from earlauto import create_app
 
 app = create_app('development')
+app.config.update(dict(
+    MAIL_SERVER='localhost',
+    MAIL_PORT=1025,
+    MAIL_USE_TLS=True,
+    MAIL_USERNAME='craigderington17@gmail.com',
+    MAIL_PASSWORD='None',
+    MAIL_DEFAULT_SENDER='EARL Automation Server <earl-automation@contactdms.com>'
+))
+
+# Flask-Mail
+mail = Mail(app)
 
 
 @app.cli.command('urlmap')
