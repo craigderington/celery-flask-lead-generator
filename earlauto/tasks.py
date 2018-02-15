@@ -733,7 +733,6 @@ def send_auto_adf_lead(lead_id):
     if not isinstance(lead_id, int):
         lead_id = int(lead_id)
 
-
     try:
         # get our lead
         lead = Lead.query.filter(
@@ -741,102 +740,116 @@ def send_auto_adf_lead(lead_id):
         )
 
         if lead:
-            # do some raw sql to get the store notification email and the campaign name
-            sql = text(
-                'select l.id, c.id, c.name, c.campaign_type, s.id as store_id, s.name as store_name, s.adf_email, av.*, '
-                'from leads l, campaigns c, stores s, appendedvisitors av, visitors v where l.appended_visitor_id = av.id '
-                'and av.visitor = v.id and v.store_id = s.id and v.campaign_id = c.id where l.id = {}'.format(lead.id)
-            )
 
-            # we have a good result
-            result = db.engine.execute(sql)
+            # make sure we did not already send this adf
+            if lead.sent_adf:
 
-            if result:
+                # log this to the console and figure out why this task is here
+                logger.info('ADF already sent for Lead ID: {} Task Aborted!')
+                revoke(task_id, terminate=True)
 
-                if result.adf_email:
+            else:
 
-                    # create the payload
-                    payload = {
-                        'from': 'ADF Lead <mail@mail.earlbdc.com>',
-                        'to': result.adf_email,
-                        'cc': 'earl-email-validation@contactdms.com',
-                        'subject': result.store_name + ' ' + result.campaign_type + ' DMS XML Lead',
-                        'text': '<?xml version="1.0" encoding="UTF-8"?>' +
-                        '<?ADF VERSION="1.0"?>' +
-                        '<adf>' +
-                        '<prospect>' +
-                        '<requestdate>' + datetime.datetime.now('%c') + '</requestdate>' +
-                        '<vehicle interest="trade-in" status="used">' +
-                        '<id sequence="1" source="' + result.store_name + ' ' + result.campaign_type + ' DMS"></id>' +
-                        '<year>' + result.car_year + '</year>' +
-                        '<make>' + result.car_make + '</make>' +
-                        '<model>' + result.car_model + '</model>' +
-                        '</vehicle>' +
-                        '<customer>' +
-                        '<contact>' +
-                        '<name part="full">' + result.first_name + ' ' + result.last_name + '</name>' +
-                        '<address type="home">' +
-                        '<street>' + result.address.address_1 + '</street>' +
-                        '<city>' + result.address.city + '</city>' +
-                        '<regioncode>' + result.address.state + '</regioncode>' +
-                        '<postalcode>' + result.address.zip_code + '</postalcode>' +
-                        '</address>' +
-                        '<email>' + result.email + '</email>' +
-                        '<phone>' + result.cell_phone + '</phone>' +
-                        '</contact>' +
-                        '<comments>Estimated Credit: ' + result.credit_range + '</comments>' +
-                        '</customer>' +
-                        '<vendor>' +
-                        '<id source="' + result.store_name + ' DMS">' + result.store_name + ' ' + result.campaign_type + ' DMS</id>' +
-                        '<vendorname>' + result.store_name + '</vendorname>' +
-                        '<contact>' +
-                        '<name part="full">' + result.store_name + '</name>' +
-                        '</contact>' +
-                        '</vendor>' +
-                        '<provider>' +
-                        '<name part="full">' + result.store_name + ' ' + result.campaign_type + ' DMS</name>' +
-                        '<service>' + result.store_name + ' ' + result.campaign_type + ' DMS</service>' +
-                        '<url>None</url>' +
-                        '</provider>' +
-                        '<leadtype>digital plus</leadtype>' +
-                        '</prospect>' +
-                        '</adf>',
-                        "o:tag": 'ADF CRM email',
-                        "o:tracking": 'False',
-                    }
+                # do some raw sql to get the store notification email and the campaign name
+                sql = text(
+                    'select l.id, c.id, c.name, c.campaign_type, s.id as store_id, s.name as store_name, s.adf_email, av.*, '
+                    'from leads l, campaigns c, stores s, appendedvisitors av, visitors v where l.appended_visitor_id = av.id '
+                    'and av.visitor = v.id and v.store_id = s.id and v.campaign_id = c.id where l.id = {}'.format(lead.id)
+                )
 
-                    # call M1 and send the email as plan ascii text
-                    r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_api_key), data=payload)
+                # we have a good result
+                result = db.engine.execute(sql)
 
-                    # check the response code
-                    if r.status_code == 200:
+                if result:
 
-                        # assign the reponse a variable
-                        mg_response = r.json()
+                    if result.adf_email:
 
-                        if 'id' in mg_response:
-                            lead.sent_adf = True
-                            lead.adf_email_receipt_id = mg_response['id']
-                            lead.adf_email_validation_message = mg_response['message']
-                            db.session.commit()
+                        # create the payload
+                        payload = {
+                            'from': 'ADF Lead <mail@mail.earlbdc.com>',
+                            'to': 'craigderington@python-development-systems.com',  # result.adf_email,
+                            'cc': 'earl-email-validation@contactdms.com',
+                            'subject': result.store_name + ' ' + result.campaign_type + ' DMS XML Lead',
+                            'text': '<?xml version="1.0" encoding="UTF-8"?>' +
+                            '<?ADF VERSION="1.0"?>' +
+                            '<adf>' +
+                            '<prospect>' +
+                            '<requestdate>' + datetime.datetime.now('%c') + '</requestdate>' +
+                            '<vehicle interest="trade-in" status="used">' +
+                            '<id sequence="1" source="' + result.store_name + ' ' + result.campaign_type + ' DMS"></id>' +
+                            '<year>' + result.car_year + '</year>' +
+                            '<make>' + result.car_make + '</make>' +
+                            '<model>' + result.car_model + '</model>' +
+                            '</vehicle>' +
+                            '<customer>' +
+                            '<contact>' +
+                            '<name part="full">' + result.first_name + ' ' + result.last_name + '</name>' +
+                            '<address type="home">' +
+                            '<street>' + result.address.address_1 + '</street>' +
+                            '<city>' + result.address.city + '</city>' +
+                            '<regioncode>' + result.address.state + '</regioncode>' +
+                            '<postalcode>' + result.address.zip_code + '</postalcode>' +
+                            '</address>' +
+                            '<email>' + result.email + '</email>' +
+                            '<phone>' + result.cell_phone + '</phone>' +
+                            '</contact>' +
+                            '<comments>Estimated Credit: ' + result.credit_range + '</comments>' +
+                            '</customer>' +
+                            '<vendor>' +
+                            '<id source="' + result.store_name + ' DMS">' + result.store_name + ' ' + result.campaign_type + ' DMS</id>' +
+                            '<vendorname>' + result.store_name + '</vendorname>' +
+                            '<contact>' +
+                            '<name part="full">' + result.store_name + '</name>' +
+                            '</contact>' +
+                            '</vendor>' +
+                            '<provider>' +
+                            '<name part="full">' + result.store_name + ' ' + result.campaign_type + ' DMS</name>' +
+                            '<service>' + result.store_name + ' ' + result.campaign_type + ' DMS</service>' +
+                            '<url>None</url>' +
+                            '</provider>' +
+                            '<leadtype>digital plus</leadtype>' +
+                            '</prospect>' +
+                            '</adf>',
+                            "o:tag": 'ADF CRM email',
+                            "o:tracking": 'False',
+                        }
+
+                        # call M1 and send the email as plan ascii text
+                        r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_api_key), data=payload)
+
+                        # check the response code
+                        if r.status_code == 200:
+
+                            # assign the response a variable
+                            mg_response = r.json()
+
+                            if 'id' in mg_response:
+                                lead.sent_adf = True
+                                lead.adf_email_receipt_id = mg_response['id']
+                                lead.adf_email_validation_message = mg_response['message']
+                                db.session.commit()
 
                         # we did not get a valid HTTP response
-                    else:
-                        # do we want to continue to re-try this task
-                        lead.sent_adf = False
-                        lead.adf_email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
-                        lead.adf_email_validation_message = 'NOT SENT'
+                        else:
+                            # do we want to continue to re-try this task
+                            lead.sent_adf = False
+                            lead.adf_email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
+                            lead.adf_email_validation_message = 'NOT SENT'
 
-                # the store does not have an adf email configured.  can not send
+                    # the store does not have an adf email configured.  can not send
+                    else:
+                        logger.info('Store ID: {} has no ADF email configured.  Task aborted'.format(result.store_id))
+                        revoke(task_id, terminate=True)
+
+                # the query on the lead details returned None
                 else:
-                    logger.info('Store ID: {} has no ADF email configured.  Task aborted'.format(result.store_id))
-            # the query on the lead details returned None
-            else:
-                logger.info('Unable to retrieve lead details for Lead ID: {}.  Task aborted'.format(lead.id))
+                    logger.info('Unable to retrieve lead details for Lead ID: {}.  Task aborted'.format(lead.id))
+                    revoke(task_id, terminate=True)
 
         # the database can not find this record
         else:
             logger.info('Lead ID: {} was not found.  Task aborted!'.format(lead_id))
+            revoke(task_id, terminate=True)
 
     # oh, no, we have a serious problem now
     except exc.SQLAlchemyError as err:
