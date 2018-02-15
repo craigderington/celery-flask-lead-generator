@@ -56,6 +56,7 @@ docs/_build/
 # PyCharm
 .idea/
 .env/
+config.py
 celerybeat-schedule
 *.sqlite
 *.db
