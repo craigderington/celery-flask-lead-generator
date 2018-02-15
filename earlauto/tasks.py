@@ -652,55 +652,62 @@ def send_lead_to_dealer(lead_id):
 
     try:
         # get our lead
-        lead = Lead.query.filter(and_(
-            Lead.id == lead_id,
-            Lead.followup_email == 0
-        ))
+        lead = Lead.query.filter(
+            Lead.id == lead_id
+        )
 
         if lead:
 
-            # do some raw sql to get the store notifivcation email and the campaign name
-            sql = text('select l.id, c.id, c.name, s.id as store_id, s.notification_email, av.*, from leads l, '
-                       'campaigns c, stores s, appendedvisitors av, visitors v where l.appended_visitor_id = av.id '
-                       'and av.visitor = v.id and v.store_id = s.id and v.campaign_id = c.id where l.id = {}'.format(lead.id))
+            if lead.sent_to_dealer:
 
-            # we have a good result
-            result = db.engine.execute(sql)
+                # we already sent this one, why are we seeing it again?
+                logger.info('Lead ID: {} has already been sent to the dealer.  Task aborted!'.format(lead.id))
+                revoke(task_id, terminate=True)
 
-            if result.notification_email and result.name:
+            else:
 
-                payload = {
-                    'from': 'New Visitor <mail.earlbdc.com>',
-                    'to:': result.notification_email,
-                    'cc': 'earl-email-validation@contactdms.com',
-                    'subject': result.name,
-                    'html': '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/> <meta http-equiv="X-UA-Compatible" content="IE=edge"/> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title></title> <style type="text/css">@media screen and (max-width: 400px){.two-column .column, .three-column .column{max-width: 100% !important;}.two-column img{max-width: 100% !important;}.three-column img{max-width: 50% !important;}}@media screen and (min-width: 401px) and (max-width: 620px){.three-column .column{max-width: 33% !important;}.two-column .column{max-width: 50% !important;}}</style><!--[if (gte mso 9)|(IE)]> <style type="text/css"> table{border-collapse: collapse !important !important;}</style><![endif]--></head><body style="margin-top:0 !important;margin-bottom:0 !important;margin-right:0 !important;margin-left:0 !important;padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;background-color:#ffffff;" ><center class="wrapper" style="width:100%;table-layout:fixed;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;" ><!--[if (gte mso 9)|(IE)]><table width="600" align="center" style="border-spacing:0;font-family:sans-serif;color:#333333;" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;" ><![endif]--><table class="outer" align="center" style="border-spacing:0;font-family:sans-serif;color:#333333;Margin:0 auto;width:100%;max-width:600px;" cellpadding="0" cellspacing="0" border="0"><tr> <td class="full-width-image" style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;" ><table align="center" style="text-align: left; border: 1px solid black; width: 100%; margin-top: 25px;"><tr style="text-align: center;"><td>' + '<b>' + '</b>' + '</td></tr><tr><td> <b>First Name:</b> ' + result.first_name + '</td><td> <b>Last Name: </b>' + result.last_name + '</td></tr><tr><td> <b>Email:</b> ' + result.email + '</td><td> <b>Phone Number: </b>' + result.cell_phone + '</td></tr><tr> <b>Street Address: </b>' + result.address1 + '</td><td> <b>City:</b> ' + result.city + '</td><td> <b>State:</b> ' + result.state + ' </td><td><b>Zip Code:</b> ' + result.zip_code + '</td></tr><tr><td> <b>Credit Range:</b> ' + result.credit_range + '</td></tr><tr><td> <b>Auto Year: </b>' + result.car_year + '</td><td><b> Auto Make: </b>' + result.car_make + '</td><td><b> Auto Model: </b>' + result.car_model + '</td></tr><tr><td><b> Campaign: </b>' + result.name + '</td></tr></table></td></tr></table></center></body></html>',
-                    'o:tracking': 'False',
-                }
+                # do some raw sql to get the store notification email and the campaign name
+                sql = text('select l.id, c.id, c.name, s.id as store_id, s.notification_email, av.*, from leads l, '
+                           'campaigns c, stores s, appendedvisitors av, visitors v where l.appended_visitor_id = av.id '
+                           'and av.visitor = v.id and v.store_id = s.id and v.campaign_id = c.id where l.id = {}'.format(lead.id))
 
-                # call mailgun and post the data payload
-                r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_apikey), data=payload)
+                # we have a good result
+                result = db.engine.execute(sql)
 
-                # we have a good HTTP response
-                if r.status_code == 200:
-                    mg_response = r.json()
+                if result.notification_email and result.name:
 
-                    if 'id' in mg_response:
-                        lead.sent_to_dealer = True
-                        lead.email_receipt_id = mg_response['id']
-                        lead.email_validation_message = mg_response['message']
-                        db.session.commit()
+                    payload = {
+                        "from": "New Visitor <mail.earlbdc.com>",
+                        "to:": "craigderington@python-development-systems.com",    # result.notification_email,
+                        "cc": "earl-email-validation@contactdms.com",
+                        "subject": result.name,
+                        "html": '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/> <meta http-equiv="X-UA-Compatible" content="IE=edge"/> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title></title> <style type="text/css">@media screen and (max-width: 400px){.two-column .column, .three-column .column{max-width: 100% !important;}.two-column img{max-width: 100% !important;}.three-column img{max-width: 50% !important;}}@media screen and (min-width: 401px) and (max-width: 620px){.three-column .column{max-width: 33% !important;}.two-column .column{max-width: 50% !important;}}</style><!--[if (gte mso 9)|(IE)]> <style type="text/css"> table{border-collapse: collapse !important !important;}</style><![endif]--></head><body style="margin-top:0 !important;margin-bottom:0 !important;margin-right:0 !important;margin-left:0 !important;padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;background-color:#ffffff;" ><center class="wrapper" style="width:100%;table-layout:fixed;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;" ><!--[if (gte mso 9)|(IE)]><table width="600" align="center" style="border-spacing:0;font-family:sans-serif;color:#333333;" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;" ><![endif]--><table class="outer" align="center" style="border-spacing:0;font-family:sans-serif;color:#333333;Margin:0 auto;width:100%;max-width:600px;" cellpadding="0" cellspacing="0" border="0"><tr> <td class="full-width-image" style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;" ><table align="center" style="text-align: left; border: 1px solid black; width: 100%; margin-top: 25px;"><tr style="text-align: center;"><td>' + '<b>' + '</b>' + '</td></tr><tr><td> <b>First Name:</b> ' + result.first_name + '</td><td> <b>Last Name: </b>' + result.last_name + '</td></tr><tr><td> <b>Email:</b> ' + result.email + '</td><td> <b>Phone Number: </b>' + result.cell_phone + '</td></tr><tr> <b>Street Address: </b>' + result.address1 + '</td><td> <b>City:</b> ' + result.city + '</td><td> <b>State:</b> ' + result.state + ' </td><td><b>Zip Code:</b> ' + result.zip_code + '</td></tr><tr><td> <b>Credit Range:</b> ' + result.credit_range + '</td></tr><tr><td> <b>Auto Year: </b>' + result.car_year + '</td><td><b> Auto Make: </b>' + result.car_make + '</td><td><b> Auto Model: </b>' + result.car_model + '</td></tr><tr><td><b> Campaign: </b>' + result.name + '</td></tr></table></td></tr></table></center></body></html>',
+                        "o:tracking": "False",
+                    }
 
-                        # call the next task in the workflow
-                        send_auto_adf_lead.delay(lead.id)
-                        send_followup_email.delay(lead.id)
+                    # call mailgun and post the data payload
+                    r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_apikey), data=payload)
 
-                # we did not get a valid HTTP response
-                else:
-                    # do we want to continue to re-try this task
-                    lead.sent_to_dealer = False
-                    lead.email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
-                    lead.email_validation_message = 'NOT SENT'
+                    # we have a good HTTP response
+                    if r.status_code == 200:
+                        mg_response = r.json()
+
+                        if 'id' in mg_response:
+                            lead.sent_to_dealer = True
+                            lead.email_receipt_id = mg_response['id']
+                            lead.email_validation_message = mg_response['message']
+                            db.session.commit()
+
+                            # call the next task in the workflow
+                            send_auto_adf_lead.delay(lead.id)
+                            send_followup_email.delay(lead.id)
+
+                    # we did not get a valid HTTP response
+                    else:
+                        # do we want to continue to re-try this task
+                        lead.sent_to_dealer = False
+                        lead.email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
+                        lead.email_validation_message = 'NOT SENT'
 
         else:
             # no lead id matching the query
@@ -734,7 +741,7 @@ def send_auto_adf_lead(lead_id):
         )
 
         if lead:
-            # do some raw sql to get the store notifivcation email and the campaign name
+            # do some raw sql to get the store notification email and the campaign name
             sql = text(
                 'select l.id, c.id, c.name, c.campaign_type, s.id as store_id, s.name as store_name, s.adf_email, av.*, '
                 'from leads l, campaigns c, stores s, appendedvisitors av, visitors v where l.appended_visitor_id = av.id '
@@ -838,4 +845,9 @@ def send_auto_adf_lead(lead_id):
 
 @celery.task(queue='send_followups', max_retries=3)
 def send_followup_email(lead_id):
+    pass
+
+
+@celery.task(queue='send_rvms', max_retries=3)
+def send_rvm(lead_id):
     pass
