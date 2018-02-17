@@ -29,6 +29,12 @@ def convert_datetime_object(o):
         return o.__str__()
 
 
+def convert_utc_to_local(utcdate_obj):
+    nowtimestamp = time.time()
+    offset = datetime.datetime.fromtimestamp(nowtimestamp) - datetime.datetime.utcfromtimestamp(nowtimestamp)
+    return utcdate_obj + offset
+
+
 def get_location(ip_addr):
     gi_lookup = gi.record_by_addr(ip_addr)
     return gi_lookup
@@ -160,7 +166,7 @@ def get_new_visitors():
                     job_number = item['job_number']
                     ip_addr = item['ip']
                     agent = item['agent']
-                    sent_date = item['sent_date']
+                    sent_date = convert_utc_to_local(item['sent_date'])
                     campaign_hash = item['campaign_hash']
                     open_hash = item['open_hash']
                     send_hash = item['send_hash']
