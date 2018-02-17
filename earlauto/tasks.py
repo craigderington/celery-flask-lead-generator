@@ -166,7 +166,7 @@ def get_new_visitors():
                     job_number = item['job_number']
                     ip_addr = item['ip']
                     agent = item['agent']
-                    sent_date = convert_utc_to_local(item['sent_date'])
+                    sent_date = datetime.datetime.now()
                     campaign_hash = item['campaign_hash']
                     open_hash = item['open_hash']
                     send_hash = item['send_hash']
