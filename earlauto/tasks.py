@@ -108,7 +108,7 @@ def get_new_visitors():
                 visitor_exists = Visitor.query.filter(and_(
                     Visitor.ip == item['ip'],
                     Visitor.campaign_hash == item['campaign_hash'],
-                    Visitor.created_date < one_day_ago
+                    Visitor.created_date <= current_time
                 )).first()
 
                 if visitor_exists:
