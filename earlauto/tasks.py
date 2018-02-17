@@ -346,6 +346,7 @@ def append_visitor(new_visitor_id):
                                             city=city.title(),
                                             state=state.upper(),
                                             zip_code=zip_code,
+                                            zip_4=zip4,
                                             credit_range=credit_range,
                                             car_year=car_year,
                                             car_model=car_model.title(),
