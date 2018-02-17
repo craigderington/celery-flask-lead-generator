@@ -405,8 +405,11 @@ def append_visitor(new_visitor_id):
                                 else:
                                     print('Did not receive a valid HTTP response code from M1.  Aborting.')
 
-                                    # revoke the task
-                                    revoke(task_id, terminate=True)
+                                    # process the record
+                                    get_visitor.processed = True
+                                    get_visitor.locked = False
+                                    get_visitor.status = 'HTTPERROR'
+                                    db.session.commit()
 
                             else:
                                 logger.warning('No campaign found for client_id: {} and job_number: {}'.format(
@@ -415,8 +418,11 @@ def append_visitor(new_visitor_id):
                                 ))
                                 print('Error:  Campaign Not Found!')
 
-                                # revoke the task
-                                revoke(task_id, terminate=True)
+                                # update the record
+                                get_visitor.processed = True
+                                get_visitor.locked = True
+                                get_visitor.status = 'NOCAMPAIGN'
+                                db.session.commit()
 
                         except exc.SQLAlchemyError as err:
                             logger.warning('The database returned error: {}'.format(str(err)))
@@ -425,8 +431,11 @@ def append_visitor(new_visitor_id):
                         # the visitor record appears to already be appended, or appended is True
                         logger.info('Visitor ID: {} is already appended.  Task aborted!')
 
-                        # revoke the task
-                        revoke(task_id, terminate=True)
+                        # process the visitor record
+                        get_visitor.processed = True
+                        get_visitor.locked = True
+                        get_visitor.status = 'APPENDED'
+                        db.session.commit()
 
                 else:
                     # this visitor record is not in the united states
@@ -434,8 +443,11 @@ def append_visitor(new_visitor_id):
                         get_visitor.id
                     ))
 
-                    # revoke the task
-                    revoke(task_id, terminate=True)
+                    # process the visitor record
+                    get_visitor.processed = True
+                    get_visitor.locked = True
+                    get_visitor.status = 'FOREIGNIP'
+                    db.session.commit()
 
             else:
                 # retry ceiling exceeded
@@ -659,9 +671,10 @@ def send_lead_to_dealer(lead_id):
 
     try:
         # get our lead
-        lead = Lead.query.filter(
-            Lead.id == lead_id
-        )
+        lead = Lead.query.filter(and_(
+            Lead.id == lead_id,
+            Lead.email_verified == 1
+        ))
 
         if lead:
 
@@ -670,6 +683,13 @@ def send_lead_to_dealer(lead_id):
                 # we already sent this one, why are we seeing it again?
                 logger.info('Lead ID: {} has already been sent to the dealer.  Task aborted!'.format(lead.id))
                 revoke(task_id, terminate=True)
+
+            elif lead.email_verified is False:
+
+                # this should not be here but just in case?
+                # send this back into the verify lead queue
+                logger.info('Lead ID: {} email address not verified.  Re-send to Verify Mail Queue!'.format(lead.id))
+                verify_lead(lead.id)
 
             else:
 
