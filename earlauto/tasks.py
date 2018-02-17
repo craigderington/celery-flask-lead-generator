@@ -275,7 +275,7 @@ def append_visitor(new_visitor_id):
             # is a visitor record we want to append
             if get_visitor.retry_counter < retry_value:
 
-                if 'US' in get_visitor.country_code.strip():
+                if 'US' in get_visitor.country_code:
 
                     if not get_visitor.appended:
 
@@ -432,7 +432,7 @@ def append_visitor(new_visitor_id):
 
             else:
                 # retry ceiling exceeded
-                logger.info('Visitor ID: {} has exceeded the M1 appended retryn ceiling.  Task aborted!'.format(
+                logger.info('Visitor ID: {} has exceeded the M1 appended retry ceiling.  Task aborted!'.format(
                     get_visitor.id
                 ))
 
