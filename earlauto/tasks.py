@@ -455,9 +455,6 @@ def append_visitor(new_visitor_id):
                     get_visitor.id
                 ))
 
-                # revoke the task
-                revoke(task_id, terminate=True)
-
         else:
             logger.info('Visitor ID: {} not found.  Query returned None.  Task aborted!')
             print('There were no records to process so I\'m going back to sleep...')
@@ -682,7 +679,6 @@ def send_lead_to_dealer(lead_id):
 
                 # we already sent this one, why are we seeing it again?
                 logger.info('Lead ID: {} has already been sent to the dealer.  Task aborted!'.format(lead.id))
-                revoke(task_id, terminate=True)
 
             elif lead.email_verified is False:
 
@@ -726,8 +722,8 @@ def send_lead_to_dealer(lead_id):
                             db.session.commit()
 
                             # call the next task in the workflow
-                            send_auto_adf_lead.delay(lead.id)
-                            send_followup_email.delay(lead.id)
+                            # send_auto_adf_lead.delay(lead.id)
+                            # send_followup_email.delay(lead.id)
 
                     # we did not get a valid HTTP response
                     else:
@@ -739,7 +735,7 @@ def send_lead_to_dealer(lead_id):
         else:
             # no lead id matching the query
             logger.info('Lead ID: {} not found.  Task aborted!'.format(lead_id))
-            revoke(task_id, terminate=True)
+            # revoke(task_id, terminate=True)
 
     except exc.SQLAlchemyError as err:
         logger.info('Database error has occurred.   Task will automatically be re-tried 3 times.')
@@ -773,7 +769,7 @@ def send_auto_adf_lead(lead_id):
 
                 # log this to the console and figure out why this task is here
                 logger.info('ADF already sent for Lead ID: {} Task Aborted!')
-                revoke(task_id, terminate=True)
+                # revoke(task_id, terminate=True)
 
             else:
 
@@ -866,17 +862,17 @@ def send_auto_adf_lead(lead_id):
                     # the store does not have an adf email configured.  can not send
                     else:
                         logger.info('Store ID: {} has no ADF email configured.  Task aborted'.format(result.store_id))
-                        revoke(task_id, terminate=True)
+                        # revoke(task_id, terminate=True)
 
                 # the query on the lead details returned None
                 else:
                     logger.info('Unable to retrieve lead details for Lead ID: {}.  Task aborted'.format(lead.id))
-                    revoke(task_id, terminate=True)
+                    # revoke(task_id, terminate=True)
 
         # the database can not find this record
         else:
             logger.info('Lead ID: {} was not found.  Task aborted!'.format(lead_id))
-            revoke(task_id, terminate=True)
+            # revoke(task_id, terminate=True)
 
     # oh, no, we have a serious problem now
     except exc.SQLAlchemyError as err:
