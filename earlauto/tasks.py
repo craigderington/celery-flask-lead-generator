@@ -281,172 +281,186 @@ def append_visitor(new_visitor_id):
             # is a visitor record we want to append
             if get_visitor.retry_counter < retry_value:
 
-                if 'US' in get_visitor.country_code:
+                if not 'GeoIP Lookup failed' in get_visitor.country_name:
 
-                    if not get_visitor.appended:
+                    if 'US' in get_visitor.country_code:
 
-                        try:
-                            # get our campaign data for the M1 API call
-                            campaign = Campaign.query.filter(and_(
-                                Campaign.client_id == get_visitor.client_id,
-                                Campaign.job_number == get_visitor.job_number
-                            )).first()
+                        if not get_visitor.appended:
 
-                            if campaign:
+                            try:
+                                # get our campaign data for the M1 API call
+                                campaign = Campaign.query.filter(and_(
+                                    Campaign.client_id == get_visitor.client_id,
+                                    Campaign.job_number == get_visitor.job_number
+                                )).first()
 
-                                # we also need the store's zip code
-                                store = Store.query.filter(
-                                    Store.id == campaign.store_id
-                                ).first()
+                                if campaign:
 
-                                url = 'https://datamatchapi.com/DMSApi/GetDmsApiData?IP={}&Dealer=DMS&Client=DMS' \
-                                      '&SubClient=Diamond-CRMDev&product=earl' \
-                                      '&JobNumber={}&ClientID={}&VendorID=DMS&DaysToSuppress=0&Radius={}&ZipCode={}'\
-                                    .format(
-                                        get_visitor.ip,
-                                        get_visitor.job_number,
-                                        get_visitor.client_id,
-                                        campaign.radius,
-                                        store.zip_code
-                                    )
+                                    # we also need the store's zip code
+                                    store = Store.query.filter(
+                                        Store.id == campaign.store_id
+                                    ).first()
 
-                                # make the M1 request
-                                r = requests.get(url, headers=hdr)
-
-                                # get the response and process appended visitors
-                                if r.status_code == 200:
-                                    json_obj = json.loads(r.text)
-                                    # print(json_obj)
-
-                                    if isinstance(json_obj[0], dict) and 'FirstName' in json_obj[0]:
-                                        first_name = json_obj[0]['FirstName']
-                                        last_name = json_obj[0]['LastName']
-                                        email = json_obj[0]['EMail']
-                                        credit_range = json_obj[0]['InferredCreditScore']
-                                        car_make = json_obj[0]['MAKE']
-                                        state = json_obj[0]['state']
-                                        city = json_obj[0]['City']
-                                        zip_code = json_obj[0]['ZipCode']
-                                        car_year = json_obj[0]['YEAR']
-                                        car_model = json_obj[0]['MODEL']
-                                        address = json_obj[0]['Address']
-                                        zip4 = json_obj[0]['Zip4']
-                                        phone = json_obj[0]['Cell']
-
-                                        # create the appended visitor record and commit
-                                        appended_visitor = AppendedVisitor(
-                                            visitor=get_visitor.id,
-                                            created_date=get_visitor.created_date,
-                                            first_name=first_name.capitalize(),
-                                            last_name=last_name.capitalize(),
-                                            email=email,
-                                            home_phone=phone,
-                                            cell_phone=phone,
-                                            address1=address,
-                                            city=city.title(),
-                                            state=state.upper(),
-                                            zip_code=zip_code,
-                                            zip_4=zip4,
-                                            credit_range=credit_range,
-                                            car_year=car_year,
-                                            car_model=car_model.title(),
-                                            car_make=car_make.capitalize(),
-                                            processed=False
+                                    url = 'https://datamatchapi.com/DMSApi/GetDmsApiData?IP={}&Dealer=DMS&Client=DMS' \
+                                          '&SubClient=Diamond-CRMDev&product=earl' \
+                                          '&JobNumber={}&ClientID={}&VendorID=DMS&DaysToSuppress=0&Radius={}&ZipCode={}'\
+                                        .format(
+                                            get_visitor.ip,
+                                            get_visitor.job_number,
+                                            get_visitor.client_id,
+                                            campaign.radius,
+                                            store.zip_code
                                         )
 
-                                        db.session.add(appended_visitor)
-                                        db.session.commit()
+                                    # make the M1 request
+                                    r = requests.get(url, headers=hdr)
 
-                                        # update the visitor instance with the appended flag
-                                        get_visitor.appended = True
-                                        get_visitor.processed = True
-                                        get_visitor.locked = True
-                                        get_visitor.status = 'APPENDED'
+                                    # get the response and process appended visitors
+                                    if r.status_code == 200:
+                                        json_obj = json.loads(r.text)
+                                        # print(json_obj)
+
+                                        if isinstance(json_obj[0], dict) and 'FirstName' in json_obj[0]:
+                                            first_name = json_obj[0]['FirstName']
+                                            last_name = json_obj[0]['LastName']
+                                            email = json_obj[0]['EMail']
+                                            credit_range = json_obj[0]['InferredCreditScore']
+                                            car_make = json_obj[0]['MAKE']
+                                            state = json_obj[0]['state']
+                                            city = json_obj[0]['City']
+                                            zip_code = json_obj[0]['ZipCode']
+                                            car_year = json_obj[0]['YEAR']
+                                            car_model = json_obj[0]['MODEL']
+                                            address = json_obj[0]['Address']
+                                            zip4 = json_obj[0]['Zip4']
+                                            phone = json_obj[0]['Cell']
+
+                                            # create the appended visitor record and commit
+                                            appended_visitor = AppendedVisitor(
+                                                visitor=get_visitor.id,
+                                                created_date=get_visitor.created_date,
+                                                first_name=first_name.capitalize(),
+                                                last_name=last_name.capitalize(),
+                                                email=email,
+                                                home_phone=phone,
+                                                cell_phone=phone,
+                                                address1=address,
+                                                city=city.title(),
+                                                state=state.upper(),
+                                                zip_code=zip_code,
+                                                zip_4=zip4,
+                                                credit_range=credit_range,
+                                                car_year=car_year,
+                                                car_model=car_model.title(),
+                                                car_make=car_make.capitalize(),
+                                                processed=False
+                                            )
+
+                                            db.session.add(appended_visitor)
+                                            db.session.commit()
+
+                                            # update the visitor instance with the appended flag
+                                            get_visitor.appended = True
+                                            get_visitor.processed = True
+                                            get_visitor.locked = True
+                                            get_visitor.status = 'APPENDED'
+                                            db.session.commit()
+                                            logger.info('Visitor Appended: {} {} {} {} {}'.format(
+                                                first_name.title(),
+                                                last_name.title(),
+                                                city.title(),
+                                                state.upper(),
+                                                zip_code
+                                            ))
+
+                                            # call the next task in the EARL workflow
+                                            create_lead.delay(appended_visitor.id)
+
+                                        else:
+                                            # update the visitor instance with the appended flag False
+                                            # and the processed flag to True.  Did not append.
+                                            get_visitor.appended = False
+                                            get_visitor.processed = True
+                                            get_visitor.locked = True
+                                            get_visitor.status = 'IPNOTFOUND'
+                                            db.session.commit()
+                                            logger.warning('No match on IP: {}'.format(get_visitor.ip))
+
+                                    elif r.status_code == 404:
+                                        get_visitor.retry_counter += 1
+                                        get_visitor.last_retry = datetime.datetime.now()
+                                        get_visitor.status = 'ERROR404'
+                                        get_visitor.locked = False
                                         db.session.commit()
-                                        logger.info('Visitor Appended: {} {} {} {} {}'.format(
-                                            first_name.title(),
-                                            last_name.title(),
-                                            city.title(),
-                                            state.upper(),
-                                            zip_code
+                                        logger.warning('M1 404 Response: Page Not Found/Data Malformed.')
+                                        print('M1 Returned 404:  Will retry Visitor ID: {} @ IP: {} next round.'.format(
+                                            get_visitor.id, get_visitor.ip
                                         ))
-
-                                        # call the next task in the EARL workflow
-                                        create_lead.delay(appended_visitor.id)
-
-                                    else:
-                                        # update the visitor instance with the appended flag False
-                                        # and the processed flag to True.  Did not append.
-                                        get_visitor.appended = False
-                                        get_visitor.processed = True
-                                        get_visitor.locked = True
-                                        get_visitor.status = 'IPNOTFOUND'
+                                    elif r.status_code == 503:
+                                        get_visitor.retry_counter += 1
+                                        get_visitor.last_retry = datetime.datetime.now()
+                                        get_visitor.status = 'ERROR503'
+                                        get_visitor.locked = False
                                         db.session.commit()
-                                        logger.warning('No match on IP: {}'.format(get_visitor.ip))
+                                        logger.critical('M1 503 Response:  Critical')
+                                        print('M1 Returned 503:  Service Unavailable')
+                                    else:
+                                        print('Did not receive a valid HTTP response code from M1.  Aborting.')
 
-                                elif r.status_code == 404:
-                                    get_visitor.retry_counter += 1
-                                    get_visitor.last_retry = datetime.datetime.now()
-                                    get_visitor.status = 'ERROR404'
-                                    get_visitor.locked = False
-                                    db.session.commit()
-                                    logger.warning('M1 404 Response: Page Not Found/Data Malformed.')
-                                    print('M1 Returned 404:  Will retry Visitor ID: {} @ IP: {} next round.'.format(
-                                        get_visitor.id, get_visitor.ip
-                                    ))
-                                elif r.status_code == 503:
-                                    get_visitor.retry_counter += 1
-                                    get_visitor.last_retry = datetime.datetime.now()
-                                    get_visitor.status = 'ERROR503'
-                                    get_visitor.locked = False
-                                    db.session.commit()
-                                    logger.critical('M1 503 Response:  Critical')
-                                    print('M1 Returned 503:  Service Unavailable')
+                                        # process the record
+                                        get_visitor.processed = True
+                                        get_visitor.locked = False
+                                        get_visitor.status = 'HTTPERROR'
+                                        db.session.commit()
+
                                 else:
-                                    print('Did not receive a valid HTTP response code from M1.  Aborting.')
+                                    logger.warning('No campaign found for client_id: {} and job_number: {}'.format(
+                                        get_visitor.client_id,
+                                        get_visitor.job_number
+                                    ))
+                                    print('Error:  Campaign Not Found!')
 
-                                    # process the record
+                                    # update the record
                                     get_visitor.processed = True
-                                    get_visitor.locked = False
-                                    get_visitor.status = 'HTTPERROR'
+                                    get_visitor.locked = True
+                                    get_visitor.status = 'NOCAMPAIGN'
                                     db.session.commit()
 
-                            else:
-                                logger.warning('No campaign found for client_id: {} and job_number: {}'.format(
-                                    get_visitor.client_id,
-                                    get_visitor.job_number
-                                ))
-                                print('Error:  Campaign Not Found!')
+                            except exc.SQLAlchemyError as err:
+                                logger.warning('The database returned error: {}'.format(str(err)))
 
-                                # update the record
-                                get_visitor.processed = True
-                                get_visitor.locked = True
-                                get_visitor.status = 'NOCAMPAIGN'
-                                db.session.commit()
+                        else:
+                            # the visitor record appears to already be appended, or appended is True
+                            logger.info('Visitor ID: {} is already appended.  Task aborted!')
 
-                        except exc.SQLAlchemyError as err:
-                            logger.warning('The database returned error: {}'.format(str(err)))
+                            # process the visitor record
+                            get_visitor.processed = True
+                            get_visitor.locked = True
+                            get_visitor.status = 'APPENDED'
+                            db.session.commit()
 
                     else:
-                        # the visitor record appears to already be appended, or appended is True
-                        logger.info('Visitor ID: {} is already appended.  Task aborted!')
+                        # this visitor record is not in the united states
+                        logger.info('Visitor ID: {} geo-located outside the U.S.  Task aborted.'.format(
+                            get_visitor.id
+                        ))
 
                         # process the visitor record
                         get_visitor.processed = True
                         get_visitor.locked = True
-                        get_visitor.status = 'APPENDED'
+                        get_visitor.status = 'FOREIGNIP'
                         db.session.commit()
-
                 else:
-                    # this visitor record is not in the united states
-                    logger.info('Visitor ID: {} geo-located outside the U.S.  Task aborted.'.format(
+
+                    # this visitor record did not geo locate
+                    logger.warning('Visitor ID: {} did not Geo-Locate.  IP skipped...'.format(
                         get_visitor.id
                     ))
 
                     # process the visitor record
                     get_visitor.processed = True
                     get_visitor.locked = True
-                    get_visitor.status = 'FOREIGNIP'
+                    get_visitor.status = 'NOGEODATA'
                     db.session.commit()
 
             else:
@@ -511,8 +525,9 @@ def create_lead(appended_visitor_id):
             appended_visitor.processed = True
             db.session.commit()
 
-            # call the next task, verify lead with Kickbox service
-            verify_lead.delay(new_lead.id)
+            # call the next tasks,
+            send_lead_to_dealer.delay(new_lead.id)
+            send_auto_adf_lead(new_lead.id)
             lead_counter += 1
 
         else:
@@ -535,7 +550,6 @@ def verify_lead(new_lead_id):
     # https://api.kickbox.io/v2/verify?email=' + lead.email + '&apikey=' + kickbox_api_key
     newleadid = new_lead_id
     task_id = celery.current_task.request.id
-    lead_counter = 0
     kickbox_api_key = 'test_b2a8972a20c5dafd8b08f6b1ebb323d6660db597fc8fde74e247af7e03776e19'
     kickbox_base_url = 'https://api.kickbox.io/v2/verify?email='
 
@@ -554,96 +568,113 @@ def verify_lead(new_lead_id):
             Lead.id == newleadid
         ).one()
 
-        if newlead.processed:
+        if newlead:
 
-            # the task should not have been created
-            logger.info('The lead has already been processed.  Task aborted!')
-            revoke(task_id, terminate=True)
+            if newlead.processed:
 
-        elif newlead.leadoptout:
+                # the task should not have been created
+                logger.info('The lead has already been processed.  Task aborted!')
+                # revoke(task_id, terminate=True)
 
-            # lead has already opted out
-            # no need to verify this email
-            logger.info('The lead email has already been opted-out.  Task aborted!')
-            revoke(task_id, terminate=True)
+            elif newlead.lead_optout:
 
-        elif newlead.email_verfified:
+                # lead has already opted out
+                # no need to verify this email
+                logger.info('The lead email has already been opted-out.  Task aborted!')
+                # revoke(task_id, terminate=True)
 
-            # the email address has already been verified
-            logger.info('The lead email has already been verified.  Task aborted!')
-            revoke(task_id, terminate=True)
+            elif newlead.email_verified:
 
-        elif newlead.followup_email:
+                # the email address has already been verified
+                logger.info('The lead email has already been verified.  Task aborted!')
+                # revoke(task_id, terminate=True)
 
-            # the email has been verified
-            # the follow up email sent
-            # why is this task even here
-            logger.info('The lead follow up email has already been sent.  Task aborted!')
-            revoke(task_id, terminate=True)
+            elif newlead.followup_email:
+
+                # the email has been verified
+                # the follow up email sent
+                # why is this task even here
+                logger.info('The lead follow up email has already been sent.  Task aborted!')
+                # revoke(task_id, terminate=True)
+
+            else:
+
+                try:
+
+                    visitor_data = AppendedVisitor.query.filter(
+                        AppendedVisitor.id == newlead.appended_visitor_id
+                    ).one()
+
+                    if visitor_data:
+
+                        if visitor_data.email:
+
+                            # set up the remaining part of the url string
+                            email_url = visitor_data.email + '&apikey=' + kickbox_api_key
+
+                            # call Kickbox Service to verify the email
+                            r = requests.get(kickbox_base_url + email_url, headers=hdr)
+
+                            # if we have a good HTTP status
+                            if r.status_code == 200:
+
+                                # set our response variable
+                                kickbox_response = r.json()
+
+                                if 'deliverable' in kickbox_response['result']:
+
+                                    # update and mark the lead processed
+                                    newlead.email_verified = True
+                                    newlead.processed = True
+                                    db.session.commit()
+
+                                    # log the result
+                                    logger.info('Lead ID: {} email addresses was validated as deliverable'.format(
+                                        newlead.id
+                                    ))
+
+                                    # call the next task in the process
+                                    # send_followup_email.delay(newlead.id)
+
+                                else:
+                                    # lead email is undeliverable
+                                    # update and mark the lead processed
+                                    newlead.email_verified = False
+                                    newlead.processed = True
+                                    db.session.commit()
+
+                                    # log the result
+                                    logger.info('Lead ID: {} email address not verified.'.format(newlead.id))
+
+                        # the lead has no usable email address
+                        # send to web scraping, maybe in another process
+                        else:
+                            newlead.email_verified = False
+                            newlead.processed = True
+                            db.session.commit()
+
+                            # log the result
+                            logger.warning('Lead ID: {} has no usable email address.  Can not verify!'.format(
+                                newlead.id
+                            ))
+
+                    # log no visitor found for this lead record
+                    else:
+                        logger.warning('The visitor query returned None.  The visitor attached to '
+                                       'Lead ID: {} not found.  Task aborted!'.format(newlead.id))
+
+                # we got a database error
+                except exc.SQLAlchemyError as db_err:
+                    print('Database returned error: {}'.format(db_err))
+                    logger.critical('Database error, aborting process...')
+
+            # the return value for the celery console
+            # this is always the return value of the task
+            return newlead.id
 
         else:
-
-            try:
-
-                visitor_data = AppendedVisitor.query.filter(
-                    AppendedVisitor.id == newlead.appended_visitor_id
-                ).one()
-
-                if visitor_data:
-
-                    if visitor_data.email:
-
-                        # set up the remaining part of the url string
-                        email_url = visitor_data.email + '&apikey=' + kickbox_api_key
-
-                        # call Kickbox Service to verify the email
-                        r = requests.get(kickbox_base_url + email_url, headers=hdr)
-
-                        # if we have a good HTTP status
-                        if r.status_code == 200:
-
-                            # set our response variable
-                            kickbox_response = r.json()
-
-                            if 'deliverable' in kickbox_response['result']:
-
-                                # update and mark the lead processed
-                                newlead.email_verified = True
-                                newlead.processed = True
-                                db.session.commit()
-
-                                # call the next task in the process
-                                send_lead_to_dealer(newlead.id)
-
-                            else:
-                                # lead email is undeliverable
-                                # update and mark the lead processed
-                                newlead.email_verified = False
-                                newlead.processed = True
-                                db.session.commit()
-
-                    # the lead has no usable email address
-                    # send to web scraping, maybe in another process
-                    else:
-                        newlead.email_verified = True
-                        newlead.processed = True
-                        db.session.commit()
-
-                # log no visitor found for this lead record
-                logger.info('The visitor query returned None.  The visitor attached to '
-                            'Lead ID: {} not found.  Task aborted!'.format(newlead.id))
-
-                # update the lead counter for our return value
-                lead_counter += 1
-
-            # we got a database error
-            except exc.SQLAlchemyError as db_err:
-                print('Database returned error: {}'.format(db_err))
-                logger.critical('Database error, aborting process...')
-
-        # the return value for the celery console
-        # this is always the return value of the task
-        return lead_counter
+            # log the lead record was not found
+            logger.info('Lead not found.  Task aborted.')
 
     except exc.SQLAlchemyError as db_err:
         print('Database returned error: {}'.format(db_err))
@@ -657,7 +688,6 @@ def send_lead_to_dealer(lead_id):
     :param lead_id:
     :return: MG response
     """
-
     task_id = celery.current_task.request.id
     mailgun_url = 'https://api.mailgun.net/v3/{domain}/messages'
     mailgun_sandbox_url = 'https://api.mailgun.net/v3/sandbox3b609311624841c0bb2f9154e41e34de.mailgun.org/messages'
@@ -668,76 +698,97 @@ def send_lead_to_dealer(lead_id):
 
     try:
         # get our lead
-        lead = Lead.query.filter(and_(
-            Lead.id == lead_id,
-            Lead.email_verified == 1
-        ))
+        verified_lead = Lead.query.filter(
+            Lead.id == lead_id
+        ).one()
 
-        if lead:
+        # make sure we have a good verified lead
+        if verified_lead:
 
-            if lead.sent_to_dealer:
+            # make sure this lead has been processed
+            # processed and email_verified is false means this
+            # lead had no valid email address
+            if verified_lead.processed:
 
-                # we already sent this one, why are we seeing it again?
-                logger.info('Lead ID: {} has already been sent to the dealer.  Task aborted!'.format(lead.id))
+                # we already sent this one to the dealer, why are we seeing it again?
+                if verified_lead.sent_to_dealer:
+                    logger.info('Lead ID: {} has already been sent to the dealer.  Task aborted!'.format(
+                        verified_lead.id))
 
-            elif lead.email_verified is False:
+                else:
 
-                # this should not be here but just in case?
-                # send this back into the verify lead queue
-                logger.info('Lead ID: {} email address not verified.  Re-send to Verify Mail Queue!'.format(lead.id))
-                verify_lead(lead.id)
+                    # do some raw sql to get the store notification email and the campaign name
+                    sql = text('select l.id, c.id, c.name, s.id as store_id, s.notification_email, av.* from leads l, '
+                               'campaigns c, stores s, appendedvisitors av, visitors v where l.appended_visitor_id = av.id '
+                               'and av.visitor = v.id and v.store_id = s.id and v.campaign_id = c.id and l.id = {}'.format(verified_lead.id))
 
-            else:
+                    # we have a good result
+                    result = db.engine.execute(sql).fetchone()
 
-                # do some raw sql to get the store notification email and the campaign name
-                sql = text('select l.id, c.id, c.name, s.id as store_id, s.notification_email, av.*, from leads l, '
-                           'campaigns c, stores s, appendedvisitors av, visitors v where l.appended_visitor_id = av.id '
-                           'and av.visitor = v.id and v.store_id = s.id and v.campaign_id = c.id where l.id = {}'.format(lead.id))
+                    if result[4] and result[2]:
 
-                # we have a good result
-                result = db.engine.execute(sql)
+                        payload = {
+                            "from": "Craig Derington <craig@craigderington.me>",
+                            "to": "craigderington@python-development-systems.com",
+                            "subject": result[2],
+                            "html": '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/> <meta http-equiv="X-UA-Compatible" content="IE=edge"/> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title></title> <style type="text/css">@media screen and (max-width: 400px){.two-column .column, .three-column .column{max-width: 100% !important;}.two-column img{max-width: 100% !important;}.three-column img{max-width: 50% !important;}}@media screen and (min-width: 401px) and (max-width: 620px){.three-column .column{max-width: 33% !important;}.two-column .column{max-width: 50% !important;}}</style><!--[if (gte mso 9)|(IE)]> <style type="text/css"> table{border-collapse: collapse !important !important;}</style><![endif]--></head><body style="margin-top:0 !important;margin-bottom:0 !important;margin-right:0 !important;margin-left:0 !important;padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;background-color:#ffffff;" ><center class="wrapper" style="width:100%;table-layout:fixed;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;" ><!--[if (gte mso 9)|(IE)]><table width="600" align="center" style="border-spacing:0;font-family:sans-serif;color:#333333;" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;" ><![endif]--><table class="outer" align="center" style="border-spacing:0;font-family:sans-serif;color:#333333;Margin:0 auto;width:100%;max-width:600px;" cellpadding="0" cellspacing="0" border="0"><tr> <td class="full-width-image" style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;" ><table align="center" style="text-align: left; border: 1px solid black; width: 100%; margin-top: 25px;"><tr style="text-align: center;"><td>' + '<b>' + '</b>' + '</td></tr><tr><td> <b>First Name:</b> ' + result[8] + '</td><td> <b>Last Name: </b>' + result[9] + '</td></tr><tr><td> <b>Email:</b> ' + result[10] + '</td><td> <b>Phone Number: </b>' + result[12] + '</td></tr><tr> <b>Street Address: </b>' + result[13] + '</td><td> <b>City:</b> ' + result[15] + '</td><td> <b>State:</b> ' + result[16] + ' </td><td><b>Zip Code:</b> ' + result[17] + '</td></tr><tr><td> <b>Credit Range:</b> ' + result[19] + '</td></tr><tr><td> <b>Auto Year: </b>' + result[20] + '</td><td><b> Auto Make: </b>' + result[21] + '</td><td><b> Auto Model: </b>' + result[22] + '</td></tr><tr><td><b> Campaign: </b>' + result[2] + '</td></tr></table></td></tr></table></center></body></html>',
+                            "o:tracking": "False",
+                        }
 
-                if result.notification_email and result.name:
+                        # call mailgun and post the data payload
+                        try:
+                            r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_apikey), data=payload)
 
-                    payload = {
-                        "from": "New Visitor <mail.earlbdc.com>",
-                        "to:": "craigderington@python-development-systems.com",    # result.notification_email,
-                        "cc": "earl-email-validation@contactdms.com",
-                        "subject": result.name,
-                        "html": '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/> <meta http-equiv="X-UA-Compatible" content="IE=edge"/> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title></title> <style type="text/css">@media screen and (max-width: 400px){.two-column .column, .three-column .column{max-width: 100% !important;}.two-column img{max-width: 100% !important;}.three-column img{max-width: 50% !important;}}@media screen and (min-width: 401px) and (max-width: 620px){.three-column .column{max-width: 33% !important;}.two-column .column{max-width: 50% !important;}}</style><!--[if (gte mso 9)|(IE)]> <style type="text/css"> table{border-collapse: collapse !important !important;}</style><![endif]--></head><body style="margin-top:0 !important;margin-bottom:0 !important;margin-right:0 !important;margin-left:0 !important;padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;background-color:#ffffff;" ><center class="wrapper" style="width:100%;table-layout:fixed;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;" ><!--[if (gte mso 9)|(IE)]><table width="600" align="center" style="border-spacing:0;font-family:sans-serif;color:#333333;" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;" ><![endif]--><table class="outer" align="center" style="border-spacing:0;font-family:sans-serif;color:#333333;Margin:0 auto;width:100%;max-width:600px;" cellpadding="0" cellspacing="0" border="0"><tr> <td class="full-width-image" style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;" ><table align="center" style="text-align: left; border: 1px solid black; width: 100%; margin-top: 25px;"><tr style="text-align: center;"><td>' + '<b>' + '</b>' + '</td></tr><tr><td> <b>First Name:</b> ' + result.first_name + '</td><td> <b>Last Name: </b>' + result.last_name + '</td></tr><tr><td> <b>Email:</b> ' + result.email + '</td><td> <b>Phone Number: </b>' + result.cell_phone + '</td></tr><tr> <b>Street Address: </b>' + result.address1 + '</td><td> <b>City:</b> ' + result.city + '</td><td> <b>State:</b> ' + result.state + ' </td><td><b>Zip Code:</b> ' + result.zip_code + '</td></tr><tr><td> <b>Credit Range:</b> ' + result.credit_range + '</td></tr><tr><td> <b>Auto Year: </b>' + result.car_year + '</td><td><b> Auto Make: </b>' + result.car_make + '</td><td><b> Auto Model: </b>' + result.car_model + '</td></tr><tr><td><b> Campaign: </b>' + result.name + '</td></tr></table></td></tr></table></center></body></html>',
-                        "o:tracking": "False",
-                    }
+                            # we have a good HTTP response
+                            if r.status_code == 200:
+                                mg_response = r.json()
 
-                    # call mailgun and post the data payload
-                    r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_apikey), data=payload)
+                                if 'id' in mg_response:
+                                    verified_lead.sent_to_dealer = True
+                                    verified_lead.email_receipt_id = mg_response['id']
+                                    verified_lead.email_validation_message = mg_response['message']
+                                    db.session.commit()
 
-                    # we have a good HTTP response
-                    if r.status_code == 200:
-                        mg_response = r.json()
+                                    # log the result
+                                    logger.info('Lead ID: {} email sent to {} on {}'.format(
+                                        verified_lead.id,
+                                        result[4],
+                                        datetime.datetime.now().strftime('%c')
+                                    ))
 
-                        if 'id' in mg_response:
-                            lead.sent_to_dealer = True
-                            lead.email_receipt_id = mg_response['id']
-                            lead.email_validation_message = mg_response['message']
-                            db.session.commit()
+                                    # call the next task in the workflow
+                                    verify_lead.delay(verified_lead.id)
 
-                            # call the next task in the workflow
-                            # send_auto_adf_lead.delay(lead.id)
-                            # send_followup_email.delay(lead.id)
+                            # we did not get a valid HTTP response
+                            else:
+                                # do we want to continue to re-try this task
+                                verified_lead.sent_to_dealer = False
+                                verified_lead.email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
+                                verified_lead.email_validation_message = 'NOT SENT'
 
-                    # we did not get a valid HTTP response
+                                # log the result
+                                logger.warning('Did not receive a valid HTTP Response from M1.  Will retry...')
+                                print('M1 Response: {}'.format(r.content))
+
+                        # got an exception from requests
+                        except requests.HTTPError as http_err:
+                            logger.warning('MailGun communication error: {}'.format(http_err))
+
                     else:
-                        # do we want to continue to re-try this task
-                        lead.sent_to_dealer = False
-                        lead.email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
-                        lead.email_validation_message = 'NOT SENT'
+
+                        # log the result
+                        logger.warning('SQL Query failed to get store and campaign data.')
+
+                # set the return value for the console
+                return verified_lead.id
 
         else:
             # no lead id matching the query
-            logger.info('Lead ID: {} not found.  Task aborted!'.format(lead_id))
+            logger.info('Verified Lead ID: {} not found.  Task aborted!'.format(lead_id))
             # revoke(task_id, terminate=True)
 
     except exc.SQLAlchemyError as err:
+        print('Database error {}'.format(err))
         logger.info('Database error has occurred.   Task will automatically be re-tried 3 times.')
 
 
@@ -775,29 +826,30 @@ def send_auto_adf_lead(lead_id):
 
                 # do some raw sql to get the store notification email and the campaign name
                 sql = text(
-                    'select l.id, c.id, c.name, c.campaign_type, s.id as store_id, s.name as store_name, s.adf_email, av.*, '
+                    'select l.id, c.id, c.name, c.campaign_type, s.id as store_id, s.name as store_name, s.adf_email, av.* '
                     'from leads l, campaigns c, stores s, appendedvisitors av, visitors v where l.appended_visitor_id = av.id '
-                    'and av.visitor = v.id and v.store_id = s.id and v.campaign_id = c.id where l.id = {}'.format(lead.id)
+                    'and av.visitor = v.id and v.store_id = s.id and v.campaign_id = c.id and l.id = {}'.format(lead.id)
                 )
 
                 # we have a good result
-                result = db.engine.execute(sql)
+                result = db.engine.execute(sql).fetchone()
 
                 if result:
 
-                    if result.adf_email:
+                    # the store must have a valid ADF email address
+                    if result[6]:
 
                         # create the payload
                         payload = {
                             'from': 'ADF Lead <mail@mail.earlbdc.com>',
-                            'to': 'craigderington@python-development-systems.com',  # result.adf_email,
-                            'cc': 'earl-email-validation@contactdms.com',
-                            'subject': result.store_name + ' ' + result.campaign_type + ' DMS XML Lead',
+                            'to': 'craigderington@python-development-systems.com',  # result[6],
+                            #'cc': 'earl-email-validation@contactdms.com',
+                            'subject': result[5] + ' ' + result[3] + ' DMS XML Lead',
                             'text': '<?xml version="1.0" encoding="UTF-8"?>' +
                             '<?ADF VERSION="1.0"?>' +
                             '<adf>' +
                             '<prospect>' +
-                            '<requestdate>' + datetime.datetime.now('%c') + '</requestdate>' +
+                            '<requestdate>' + datetime.datetime.now.().strftime('%c') + '</requestdate>' +
                             '<vehicle interest="trade-in" status="used">' +
                             '<id sequence="1" source="' + result.store_name + ' ' + result.campaign_type + ' DMS"></id>' +
                             '<year>' + result.car_year + '</year>' +
@@ -852,12 +904,20 @@ def send_auto_adf_lead(lead_id):
                                 lead.adf_email_validation_message = mg_response['message']
                                 db.session.commit()
 
+                                # log the result
+                                logger.info('ADF email sent to {} for Lead ID: {}'.format(
+                                    result[5], lead.id
+                                ))
+
                         # we did not get a valid HTTP response
                         else:
                             # do we want to continue to re-try this task
                             lead.sent_adf = False
                             lead.adf_email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
                             lead.adf_email_validation_message = 'NOT SENT'
+
+                            # log the result
+                            logger.warning('Lead ID: {} ADF email send returned an HTTP Error.'.format(lead.id))
 
                     # the store does not have an adf email configured.  can not send
                     else:
@@ -868,6 +928,9 @@ def send_auto_adf_lead(lead_id):
                 else:
                     logger.info('Unable to retrieve lead details for Lead ID: {}.  Task aborted'.format(lead.id))
                     # revoke(task_id, terminate=True)
+
+            # return the lead id to the console
+            return lead.id
 
         # the database can not find this record
         else:

@@ -26,20 +26,10 @@ user_agent_list = [
 ip_list = []
 client_id_job_number_list = [
     {
-        'client_id': 'xyzTr83932',
-        'job_number': '39651',
-        'campaign': 'PYTHON-DEV-SYSTEMS'
-    },
-    {
-        'client_id': 'mnx4274tru',
+        'client_id': 'pds74840t',
         'job_number': '39650',
-        'campaign': 'EXIT_REALTY'
+        'campaign': 'b7875b4b'
     },
-    {
-        'client_id': 'zrx9876t4u',
-        'job_number': '39656',
-        'campaign': 'ORLANDO_NISSAN'
-    }
 ]
 
 
@@ -78,7 +68,7 @@ def main():
             ip = row[0]
             ip_list.append(ip)
 
-    for ip_addr in ip_list[100:1000]:
+    for ip_addr in ip_list:
         # set variables from the lists above
         agent = random.choice(user_agent_list)
         job_number = client_id_job_number_list[0]['job_number']
@@ -91,10 +81,10 @@ def main():
             'job_number': job_number,
             'client_id': client_id,
             'campaign': campaign,
-            'sent_date': datetime.datetime.now(),
             'opens': 0,
             'agent': agent,
-            'processed': 0
+            'processed': 0,
+            'num_visits': 1
         }
 
         # create send, campaign and open hashes
@@ -107,9 +97,15 @@ def main():
         event_record['send_hash'] = send_hash
         event_record['campaign_hash'] = campaign_hash
         event_record['open_hash'] = open_hash
+        event_record['sent_date'] = datetime.datetime.now()
 
         sent_collection = get_collection('sent_collection')
-        new_record = sent_collection.insert_one(event_record).inserted_id
+        visitor_exists = sent_collection.find_one({'ip': ip, 'send_hash': send_hash})
+
+        if visitor_exists is None:
+            new_record = sent_collection.insert_one(event_record).inserted_id
+        else:
+            sent_collection.update_one({'_id': visitor_exists['_id']}, {'$inc': {'num_visits': 1}}, True)
         # print('Record Created: {}'.format(new_record))
 
         campaign_collection = get_collection('campaign_collection')
@@ -144,7 +140,7 @@ def main():
             open_collection.update_one({'open_hash': open_hash}, {'$inc': {'sends': 1}}, True)
 
         # print the send hash to the console
-        print(ip_addr, send_hash)
+        print('IP {} record created.  ID: {} Send Hash: {}'.format(ip_addr, new_record, send_hash))
         time.sleep(0.005)
         line_counter += 1
 
