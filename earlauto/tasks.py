@@ -775,6 +775,7 @@ def send_lead_to_dealer(lead_id):
                             verified_lead.sent_to_dealer = False
                             verified_lead.email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
                             verified_lead.email_validation_message = 'NOT SENT'
+                            db.session.commit()
 
                             # log the result
                             logger.warning('Did not receive a valid HTTP Response from M1.  Will retry...')
@@ -929,6 +930,7 @@ def send_auto_adf_lead(lead_id):
                             lead.sent_adf = False
                             lead.adf_email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
                             lead.adf_email_validation_message = 'NOT SENT'
+                            db.session.commit()
 
                             # log the result
                             logger.warning('Lead ID: {} ADF email send returned an HTTP Error.'.format(lead.id))
