@@ -582,12 +582,7 @@ def verify_lead(new_lead_id):
 
         if newlead:
 
-            if newlead.processed:
-
-                # the task should not have been created
-                logger.info('The lead has already been processed.  Task aborted!')
-
-            elif newlead.lead_optout:
+            if newlead.lead_optout:
 
                 # lead has already opted out
                 # no need to verify this email
