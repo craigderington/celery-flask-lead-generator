@@ -717,7 +717,7 @@ def send_lead_to_dealer(lead_id):
             # make sure this lead has been processed
             # processed and email_verified is false means this
             # lead had no valid email address
-            if verified_lead.processed:
+            if not verified_lead.processed:
 
                 # we already sent this one to the dealer, why are we seeing it again?
                 if verified_lead.sent_to_dealer:
@@ -755,6 +755,7 @@ def send_lead_to_dealer(lead_id):
                                 mg_response = r.json()
 
                                 if 'id' in mg_response:
+                                    verified_lead.processed = True
                                     verified_lead.sent_to_dealer = True
                                     verified_lead.email_receipt_id = mg_response['id']
                                     verified_lead.email_validation_message = mg_response['message']
@@ -798,6 +799,9 @@ def send_lead_to_dealer(lead_id):
         else:
             # no lead id matching the query
             logger.info('Verified Lead ID: {} not found.  Task aborted!'.format(lead_id))
+
+        # return lead ID to the console
+        return lead_id
 
     except exc.SQLAlchemyError as err:
         print('Database error {}'.format(err))
