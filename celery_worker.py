@@ -1,7 +1,7 @@
 from celery import Celery
 from celery.schedules import crontab
 from earlauto import create_app
-from earlauto.tasks import log, get_new_visitors
+from earlauto.tasks import log, get_new_visitors, resend_http_errors
 
 
 def create_celery(app):
@@ -29,6 +29,7 @@ celery = create_celery(flask_app)
 @celery.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
     sender.add_periodic_task(2.5, get_new_visitors, name='EARL Get New Visitors')
+    sender.add_periodic_task(20.0, resend_http_errors, name='EARL Resend HTTP Errors')
     # Executes every Monday morning at 7:30 a.m.
     sender.add_periodic_task(
         crontab(hour=7, minute=30, day_of_week=1),

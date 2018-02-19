@@ -11,7 +11,7 @@ from celery.utils.log import get_task_logger
 from celery.task.control import revoke
 from earlauto import celery, db
 from earlauto.models import Visitor, Campaign, AppendedVisitor, Store, Lead
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 from sqlalchemy import exc
 from sqlalchemy import text
 
@@ -36,27 +36,6 @@ def convert_utc_to_local(utcdate_obj):
 def get_location(ip_addr):
     gi_lookup = gi.record_by_addr(ip_addr)
     return gi_lookup
-
-
-@celery.task(bind=True)
-def long_task(self):
-    """Background task that runs a long function with progress reports."""
-    verb = ['Starting up', 'Booting', 'Repairing', 'Loading', 'Checking']
-    adjective = ['master', 'radiant', 'silent', 'harmonic', 'fast']
-    noun = ['solar array', 'particle reshaper', 'cosmic ray', 'orbiter', 'bit']
-    message = ''
-    total = random.randint(10, 50)
-    for i in range(total):
-        if not message or random.random() < 0.25:
-            message = '{0} {1} {2}...'.format(random.choice(verb),
-                                              random.choice(adjective),
-                                              random.choice(noun))
-        self.update_state(state='PROGRESS',
-                          meta={'current': i, 'total': total,
-                                'status': message})
-        time.sleep(1)
-    return {'current': 100, 'total': 100, 'status': 'Task completed!',
-            'result': 42}
 
 
 @celery.task
@@ -962,3 +941,64 @@ def send_followup_email(lead_id):
 @celery.task(queue='send_rvms', max_retries=3)
 def send_rvm(lead_id):
     pass
+
+
+@celery.task(queue='append_visitors', max_retries=3)
+def resend_http_errors():
+    """
+    Resend any Visitor records that returned Data Provider
+    HTTP Errors during append_visitor function
+    Timedelta: 12 hours ago
+    :return: list
+    """
+    current_time = datetime.datetime.now()
+    twelve_hours_ago = current_time - datetime.timedelta(hours=12)
+    visitor_counter = 0
+    retry_ceiling = 3
+
+    # get our list of visitors that did not append
+    # due to http error 404 or 503 at data provider
+    try:
+
+        visitors = Visitor.query.filter(and_(
+            Visitor.status.contains('ERROR'),
+            Visitor.locked == False,
+            Visitor.last_retry > twelve_hours_ago,
+            Visitor.retry_counter <= retry_ceiling
+        )).all()
+
+        # check to see if we have a valid visitors object
+
+        if visitors:
+
+            # loop the visitors list
+
+            for visitor in visitors:
+
+                # add the visitor ID to the append_visitor task queue
+                append_visitor.delay(visitor.id)
+
+                visitor.status = None
+                visitor.last_retry = datetime.datetime.now()
+                db.session.commit()
+
+                # log the result
+                logger.info('Visitor ID: {} was airdropped back into the append_visitor task queue.'.format(
+                    visitor.id
+                ))
+
+                # increment the counter
+                visitor_counter += 1
+
+            # return the number of records to the console
+            return visitor_counter
+
+        else:
+            # log the result
+            logger.info('There are zero http error records to send.  Back to sleep for 12 hours.  '
+                        'Good Morning & Good Night.')
+
+    except exc.SQLAlchemyError as err:
+
+        # log the result
+        logger.critical('The database returned error: {}'.format(str(err)))

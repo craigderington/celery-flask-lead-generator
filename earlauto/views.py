@@ -2,8 +2,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, jsonify, url_for
 from earlauto import db
 from earlauto.models import Visitor, AppendedVisitor
-from earlauto.tasks import long_task
-
+from earlauto.tasks import append_visitor
 home = Blueprint('home', __name__)
 
 
@@ -13,21 +12,9 @@ def init_db():
     db.session.commit()
 
 
-@home.route('/')
-def longtask():
-    """add a new task and start running it after 10 seconds"""
-    eta = datetime.utcnow() + timedelta(seconds=10)
-    task = long_task.apply_async(eta=eta)
-    return jsonify({
-        '_links': {
-            'task': url_for('home.taskstatus', task_id=task.id, _external=True)
-        }
-    }), 202
-
-
 @home.route('/status/<task_id>/', methods=['GET', 'POST'])
 def taskstatus(task_id):
-    task = long_task.AsyncResult(task_id)
+    task = append_visitor.AsyncResult(task_id)
     if task.state == 'PENDING':
         # job did not start yet
         response = {
