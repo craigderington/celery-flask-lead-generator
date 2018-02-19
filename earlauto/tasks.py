@@ -709,87 +709,90 @@ def send_lead_to_dealer(lead_id):
         # make sure we have a good verified lead
         if verified_lead:
 
-            # make sure this lead has been processed
-            # processed and email_verified is false means this
-            # lead had no valid email address
-            if not verified_lead.processed:
+            # we already sent this one to the dealer, why are we seeing it again?
+            if verified_lead.sent_to_dealer:
 
-                # we already sent this one to the dealer, why are we seeing it again?
-                if verified_lead.sent_to_dealer:
+                # log the result
+                logger.info('Lead ID: {} has already been sent to the dealer.  Task aborted!'.format(
+                    verified_lead.id))
 
-                    # log the result
-                    logger.info('Lead ID: {} has already been sent to the dealer.  Task aborted!'.format(
-                        verified_lead.id))
+            elif verified_lead.email_receipt_id and verified_lead.email_validation_message:
+
+                # log the result
+                logger.info('Lead ID: {} was already sent.  Email Receipt: {}'.format(
+                    verified_lead.id,
+                    verified_lead.email_receipt_id
+                ))
+
+            else:
+
+                # do some raw sql to get the store notification email and the campaign name
+                sql = text('select l.id, c.id, c.name, s.id as store_id, s.notification_email, av.* from leads l, '
+                           'campaigns c, stores s, appendedvisitors av, visitors v where l.appended_visitor_id = av.id '
+                           'and av.visitor = v.id and v.store_id = s.id and v.campaign_id = c.id and l.id = {}'.format(verified_lead.id))
+
+                # we have a good result
+                result = db.engine.execute(sql).fetchone()
+
+                if result[4] and result[2]:
+
+                    payload = {
+                        "from": "Craig Derington <craig@craigderington.me>",
+                        "to": "craigderington@python-development-systems.com",
+                        "subject": result[2],
+                        "html": '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/> <meta http-equiv="X-UA-Compatible" content="IE=edge"/> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title></title> <style type="text/css">@media screen and (max-width: 400px){.two-column .column, .three-column .column{max-width: 100% !important;}.two-column img{max-width: 100% !important;}.three-column img{max-width: 50% !important;}}@media screen and (min-width: 401px) and (max-width: 620px){.three-column .column{max-width: 33% !important;}.two-column .column{max-width: 50% !important;}}</style><!--[if (gte mso 9)|(IE)]> <style type="text/css"> table{border-collapse: collapse !important !important;}</style><![endif]--></head><body style="margin-top:0 !important;margin-bottom:0 !important;margin-right:0 !important;margin-left:0 !important;padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;background-color:#ffffff;" ><center class="wrapper" style="width:100%;table-layout:fixed;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;" ><!--[if (gte mso 9)|(IE)]><table width="600" align="center" style="border-spacing:0;font-family:sans-serif;color:#333333;" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;" ><![endif]--><table class="outer" align="center" style="border-spacing:0;font-family:sans-serif;color:#333333;Margin:0 auto;width:100%;max-width:600px;" cellpadding="0" cellspacing="0" border="0"><tr> <td class="full-width-image" style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;" ><table align="center" style="text-align: left; border: 1px solid black; width: 100%; margin-top: 25px;"><tr style="text-align: center;"><td>' + '<b>' + '</b>' + '</td></tr><tr><td> <b>First Name:</b> ' + result[8] + '</td><td> <b>Last Name: </b>' + result[9] + '</td></tr><tr><td> <b>Email:</b> ' + result[10] + '</td><td> <b>Phone Number: </b>' + result[12] + '</td></tr><tr> <b>Street Address: </b>' + result[13] + '</td><td> <b>City:</b> ' + result[15] + '</td><td> <b>State:</b> ' + result[16] + ' </td><td><b>Zip Code:</b> ' + result[17] + '</td></tr><tr><td> <b>Credit Range:</b> ' + result[19] + '</td></tr><tr><td> <b>Auto Year: </b>' + result[20] + '</td><td><b> Auto Make: </b>' + result[21] + '</td><td><b> Auto Model: </b>' + result[22] + '</td></tr><tr><td><b> Campaign: </b>' + result[2] + '</td></tr></table></td></tr></table></center></body></html>',
+                        "o:tracking": "False",
+                    }
+
+                    # call mailgun and post the data payload
+                    try:
+                        r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_apikey), data=payload)
+
+                        # we have a good HTTP response
+                        if r.status_code == 200:
+                            mg_response = r.json()
+
+                            if 'id' in mg_response:
+                                verified_lead.processed = True
+                                verified_lead.sent_to_dealer = True
+                                verified_lead.email_receipt_id = mg_response['id']
+                                verified_lead.email_validation_message = mg_response['message']
+                                db.session.commit()
+
+                                # log the result
+                                logger.info('Lead ID: {} email sent to {} on {}'.format(
+                                    verified_lead.id,
+                                    result[4],
+                                    datetime.datetime.now().strftime('%c')
+                                ))
+
+                                # call the next task in the workflow
+                                verify_lead.delay(verified_lead.id)
+
+                        # we did not get a valid HTTP response
+                        else:
+                            # do we want to continue to re-try this task
+                            verified_lead.sent_to_dealer = False
+                            verified_lead.email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
+                            verified_lead.email_validation_message = 'NOT SENT'
+
+                            # log the result
+                            logger.warning('Did not receive a valid HTTP Response from M1.  Will retry...')
+                            print('M1 Response: {}'.format(r.content))
+
+                    # got an exception from requests
+                    except requests.HTTPError as http_err:
+
+                        # log the result
+                        logger.warning('MailGun communication error: {}'.format(http_err))
 
                 else:
 
-                    # do some raw sql to get the store notification email and the campaign name
-                    sql = text('select l.id, c.id, c.name, s.id as store_id, s.notification_email, av.* from leads l, '
-                               'campaigns c, stores s, appendedvisitors av, visitors v where l.appended_visitor_id = av.id '
-                               'and av.visitor = v.id and v.store_id = s.id and v.campaign_id = c.id and l.id = {}'.format(verified_lead.id))
+                    # log the result
+                    logger.warning('SQL Query failed to get store and campaign data.')
 
-                    # we have a good result
-                    result = db.engine.execute(sql).fetchone()
-
-                    if result[4] and result[2]:
-
-                        payload = {
-                            "from": "Craig Derington <craig@craigderington.me>",
-                            "to": "craigderington@python-development-systems.com",
-                            "subject": result[2],
-                            "html": '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/> <meta http-equiv="X-UA-Compatible" content="IE=edge"/> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title></title> <style type="text/css">@media screen and (max-width: 400px){.two-column .column, .three-column .column{max-width: 100% !important;}.two-column img{max-width: 100% !important;}.three-column img{max-width: 50% !important;}}@media screen and (min-width: 401px) and (max-width: 620px){.three-column .column{max-width: 33% !important;}.two-column .column{max-width: 50% !important;}}</style><!--[if (gte mso 9)|(IE)]> <style type="text/css"> table{border-collapse: collapse !important !important;}</style><![endif]--></head><body style="margin-top:0 !important;margin-bottom:0 !important;margin-right:0 !important;margin-left:0 !important;padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;background-color:#ffffff;" ><center class="wrapper" style="width:100%;table-layout:fixed;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;" ><!--[if (gte mso 9)|(IE)]><table width="600" align="center" style="border-spacing:0;font-family:sans-serif;color:#333333;" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;" ><![endif]--><table class="outer" align="center" style="border-spacing:0;font-family:sans-serif;color:#333333;Margin:0 auto;width:100%;max-width:600px;" cellpadding="0" cellspacing="0" border="0"><tr> <td class="full-width-image" style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;" ><table align="center" style="text-align: left; border: 1px solid black; width: 100%; margin-top: 25px;"><tr style="text-align: center;"><td>' + '<b>' + '</b>' + '</td></tr><tr><td> <b>First Name:</b> ' + result[8] + '</td><td> <b>Last Name: </b>' + result[9] + '</td></tr><tr><td> <b>Email:</b> ' + result[10] + '</td><td> <b>Phone Number: </b>' + result[12] + '</td></tr><tr> <b>Street Address: </b>' + result[13] + '</td><td> <b>City:</b> ' + result[15] + '</td><td> <b>State:</b> ' + result[16] + ' </td><td><b>Zip Code:</b> ' + result[17] + '</td></tr><tr><td> <b>Credit Range:</b> ' + result[19] + '</td></tr><tr><td> <b>Auto Year: </b>' + result[20] + '</td><td><b> Auto Make: </b>' + result[21] + '</td><td><b> Auto Model: </b>' + result[22] + '</td></tr><tr><td><b> Campaign: </b>' + result[2] + '</td></tr></table></td></tr></table></center></body></html>',
-                            "o:tracking": "False",
-                        }
-
-                        # call mailgun and post the data payload
-                        try:
-                            r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_apikey), data=payload)
-
-                            # we have a good HTTP response
-                            if r.status_code == 200:
-                                mg_response = r.json()
-
-                                if 'id' in mg_response:
-                                    verified_lead.processed = True
-                                    verified_lead.sent_to_dealer = True
-                                    verified_lead.email_receipt_id = mg_response['id']
-                                    verified_lead.email_validation_message = mg_response['message']
-                                    db.session.commit()
-
-                                    # log the result
-                                    logger.info('Lead ID: {} email sent to {} on {}'.format(
-                                        verified_lead.id,
-                                        result[4],
-                                        datetime.datetime.now().strftime('%c')
-                                    ))
-
-                                    # call the next task in the workflow
-                                    verify_lead.delay(verified_lead.id)
-
-                            # we did not get a valid HTTP response
-                            else:
-                                # do we want to continue to re-try this task
-                                verified_lead.sent_to_dealer = False
-                                verified_lead.email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
-                                verified_lead.email_validation_message = 'NOT SENT'
-
-                                # log the result
-                                logger.warning('Did not receive a valid HTTP Response from M1.  Will retry...')
-                                print('M1 Response: {}'.format(r.content))
-
-                        # got an exception from requests
-                        except requests.HTTPError as http_err:
-
-                            # log the result
-                            logger.warning('MailGun communication error: {}'.format(http_err))
-
-                    else:
-
-                        # log the result
-                        logger.warning('SQL Query failed to get store and campaign data.')
-
-                # set the return value for the console
-                return verified_lead.id
+            # set the return value for the console
+            return verified_lead.id
 
         else:
             # no lead id matching the query
