@@ -499,7 +499,6 @@ def create_lead(appended_visitor_id):
     """
 
     visitor_id = appended_visitor_id
-    task_id = celery.current_task.request.id
     lead_counter = 0
 
     # make sure visitor_id in an integer
