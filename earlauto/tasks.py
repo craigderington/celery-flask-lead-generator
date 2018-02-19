@@ -9,13 +9,11 @@ import requests
 from celery.signals import task_postrun
 from celery.utils.log import get_task_logger
 from celery.task.control import revoke
-from celery import current_task
 from earlauto import celery, db
 from earlauto.models import Visitor, Campaign, AppendedVisitor, Store, Lead
 from sqlalchemy import and_
 from sqlalchemy import exc
 from sqlalchemy import text
-from flask_mail import Message
 
 # set up our logger utility
 logger = get_task_logger(__name__)
@@ -222,20 +220,25 @@ def get_new_visitors():
                         last_retry=datetime.datetime.now(),
                         status='NEW'
                     )
+
+                    # add the new visitor and commit
                     db.session.add(new_visitor)
                     db.session.commit()
 
                     # update the processed flag in MongoDB and set to True
                     sent_collection.update_one({'_id': record_id}, {'$set': {'processed': 1}}, True)
+
+                    # log the result
                     logger.info('Visitor from {} created for Store ID: {} for Campaign: {}. '.format(
                         new_visitor.ip,
                         new_visitor.store_id,
                         new_visitor.campaign_hash
                     ))
 
-                    # on to the next task
+                    # next task >> append_visitor
                     append_visitor.delay(new_visitor.id)
 
+            # return new visitor count to the console
             return data_count
 
         else:
@@ -261,9 +264,8 @@ def append_visitor(new_visitor_id):
     hdr = {'user-agent': 'EARL Automation Server v.01', 'content-type': 'application/json'}
     retry_value = 3
 
-    # assign the current task ID so we have some task control options
-    task_id = celery.current_task.request.id
-
+    # check to make sure 'new_visitor_id' is an integer
+    # if not, convert to an integer
     if not isinstance(new_visitor_id, int):
         new_visitor_id = int(new_visitor_id)
 
@@ -365,15 +367,18 @@ def append_visitor(new_visitor_id):
                                             get_visitor.locked = True
                                             get_visitor.status = 'APPENDED'
                                             db.session.commit()
-                                            logger.info('Visitor Appended: {} {} {} {} {}'.format(
+
+                                            # log the result
+                                            logger.info('Visitor Appended: {} {} {} {} {} @ {}'.format(
                                                 first_name.title(),
                                                 last_name.title(),
                                                 city.title(),
                                                 state.upper(),
-                                                zip_code
+                                                zip_code,
+                                                get_visitor.ip
                                             ))
 
-                                            # call the next task in the EARL workflow
+                                            # next task >> create_lead
                                             create_lead.delay(appended_visitor.id)
 
                                         else:
@@ -384,6 +389,8 @@ def append_visitor(new_visitor_id):
                                             get_visitor.locked = True
                                             get_visitor.status = 'IPNOTFOUND'
                                             db.session.commit()
+
+                                            # log the result
                                             logger.warning('No match on IP: {}'.format(get_visitor.ip))
 
                                     elif r.status_code == 404:
@@ -392,79 +399,86 @@ def append_visitor(new_visitor_id):
                                         get_visitor.status = 'ERROR404'
                                         get_visitor.locked = False
                                         db.session.commit()
+
+                                        # log the result
                                         logger.warning('M1 404 Response: Page Not Found/Data Malformed.')
                                         print('M1 Returned 404:  Will retry Visitor ID: {} @ IP: {} next round.'.format(
                                             get_visitor.id, get_visitor.ip
                                         ))
+
                                     elif r.status_code == 503:
                                         get_visitor.retry_counter += 1
                                         get_visitor.last_retry = datetime.datetime.now()
                                         get_visitor.status = 'ERROR503'
                                         get_visitor.locked = False
                                         db.session.commit()
-                                        logger.critical('M1 503 Response:  Critical')
-                                        print('M1 Returned 503:  Service Unavailable')
-                                    else:
-                                        print('Did not receive a valid HTTP response code from M1.  Aborting.')
 
+                                        # log the result
+                                        logger.critical(
+                                            'M1 503 Response:  Critical.  Service Unavailable.  Re-queue Task')
+
+                                    else:
                                         # process the record
                                         get_visitor.processed = True
                                         get_visitor.locked = False
                                         get_visitor.status = 'HTTPERROR'
                                         db.session.commit()
 
-                                else:
-                                    logger.warning('No campaign found for client_id: {} and job_number: {}'.format(
-                                        get_visitor.client_id,
-                                        get_visitor.job_number
-                                    ))
-                                    print('Error:  Campaign Not Found!')
+                                        # log the result
+                                        logger.critical(
+                                            'Unknown HTTP Status Code Returned from M1. Re-queue Task')
 
+                                else:
                                     # update the record
                                     get_visitor.processed = True
                                     get_visitor.locked = True
                                     get_visitor.status = 'NOCAMPAIGN'
                                     db.session.commit()
 
+                                    # log the result
+                                    logger.warning('No campaign found for client_id: {} and job_number: {}'.format(
+                                        get_visitor.client_id,
+                                        get_visitor.job_number
+                                    ))
+
                             except exc.SQLAlchemyError as err:
                                 logger.warning('The database returned error: {}'.format(str(err)))
 
                         else:
-                            # the visitor record appears to already be appended, or appended is True
-                            logger.info('Visitor ID: {} is already appended.  Task aborted!')
-
                             # process the visitor record
                             get_visitor.processed = True
                             get_visitor.locked = True
                             get_visitor.status = 'APPENDED'
                             db.session.commit()
 
-                    else:
-                        # this visitor record is not in the united states
-                        logger.info('Visitor ID: {} geo-located outside the U.S.  Task aborted.'.format(
-                            get_visitor.id
-                        ))
+                            # log the result
+                            logger.info('Visitor ID: {} is already appended.  Task aborted!')
 
+                    else:
                         # process the visitor record
                         get_visitor.processed = True
                         get_visitor.locked = True
                         get_visitor.status = 'FOREIGNIP'
                         db.session.commit()
+
+                        # log the result
+                        logger.info('Visitor ID: {} geo-located outside the U.S.  Task aborted.'.format(
+                            get_visitor.id
+                        ))
                 else:
-
-                    # this visitor record did not geo locate
-                    logger.warning('Visitor ID: {} did not Geo-Locate.  IP skipped...'.format(
-                        get_visitor.id
-                    ))
-
                     # process the visitor record
                     get_visitor.processed = True
                     get_visitor.locked = True
                     get_visitor.status = 'NOGEODATA'
                     db.session.commit()
 
+                    # log the result
+                    logger.warning('Visitor ID: {} did not Geo-Locate.  IP skipped...'.format(
+                        get_visitor.id
+                    ))
+
             else:
-                # retry ceiling exceeded
+                # log the result
                 logger.info('Visitor ID: {} has exceeded the M1 appended retry ceiling.  Task aborted!'.format(
                     get_visitor.id
                 ))
@@ -488,15 +502,18 @@ def create_lead(appended_visitor_id):
     task_id = celery.current_task.request.id
     lead_counter = 0
 
+    # make sure visitor_id in an integer
+    # if not, convert to integer
     if not isinstance(visitor_id, int):
         visitor_id = int(appended_visitor_id)
 
-    # get the records
+    # get the 'appended_visitor' record
     try:
         appended_visitor = AppendedVisitor.query.filter(
             AppendedVisitor.id == visitor_id
         ).one()
 
+        # check to ensure the query returned a valid record
         if appended_visitor:
 
             # create the new lead record
@@ -514,6 +531,7 @@ def create_lead(appended_visitor_id):
             db.session.add(new_lead)
             db.session.commit()
 
+            # log the result
             logger.info('Lead created: {} {} Email: {} on {}'.format(
                 appended_visitor.first_name,
                 appended_visitor.last_name,
@@ -521,21 +539,16 @@ def create_lead(appended_visitor_id):
                 datetime.datetime.now()
             ))
 
-            # flag the lead as processed
-            appended_visitor.processed = True
-            db.session.commit()
-
-            # call the next tasks,
+            # next tasks >> send_lead_to_dealer, send_auto_adf_lead
             send_lead_to_dealer.delay(new_lead.id)
             send_auto_adf_lead(new_lead.id)
-            lead_counter += 1
 
         else:
+            # log the result
             logger.info('Appended Visitor: {} was not found in the database.  Task aborted')
-            revoke(task_id, terminate=True)
 
-        # return the number of leads created
-        return lead_counter
+        # return the task argument 'visitor ID' to the console
+        return visitor_id
 
     except exc.SQLAlchemyError as err:
         print('A database error occurred: {}'.format(err))
@@ -574,20 +587,17 @@ def verify_lead(new_lead_id):
 
                 # the task should not have been created
                 logger.info('The lead has already been processed.  Task aborted!')
-                # revoke(task_id, terminate=True)
 
             elif newlead.lead_optout:
 
                 # lead has already opted out
                 # no need to verify this email
                 logger.info('The lead email has already been opted-out.  Task aborted!')
-                # revoke(task_id, terminate=True)
 
             elif newlead.email_verified:
 
                 # the email address has already been verified
                 logger.info('The lead email has already been verified.  Task aborted!')
-                # revoke(task_id, terminate=True)
 
             elif newlead.followup_email:
 
@@ -595,7 +605,6 @@ def verify_lead(new_lead_id):
                 # the follow up email sent
                 # why is this task even here
                 logger.info('The lead follow up email has already been sent.  Task aborted!')
-                # revoke(task_id, terminate=True)
 
             else:
 
@@ -658,8 +667,8 @@ def verify_lead(new_lead_id):
                                 newlead.id
                             ))
 
-                    # log no visitor found for this lead record
                     else:
+                        # log the result
                         logger.warning('The visitor query returned None.  The visitor attached to '
                                        'Lead ID: {} not found.  Task aborted!'.format(newlead.id))
 
@@ -669,11 +678,11 @@ def verify_lead(new_lead_id):
                     logger.critical('Database error, aborting process...')
 
             # the return value for the celery console
-            # this is always the return value of the task
+            # this is always the return ID value of the task
             return newlead.id
 
         else:
-            # log the lead record was not found
+            # log the result
             logger.info('Lead not found.  Task aborted.')
 
     except exc.SQLAlchemyError as db_err:
@@ -688,11 +697,12 @@ def send_lead_to_dealer(lead_id):
     :param lead_id:
     :return: MG response
     """
-    task_id = celery.current_task.request.id
     mailgun_url = 'https://api.mailgun.net/v3/{domain}/messages'
     mailgun_sandbox_url = 'https://api.mailgun.net/v3/sandbox3b609311624841c0bb2f9154e41e34de.mailgun.org/messages'
     mailgun_apikey = 'key-dfd370f4412eaccce27394f7bceaee0e'
 
+    # check to make sure 'lead_id' is an integer
+    # if not, convert to integer
     if not isinstance(lead_id, int):
         lead_id = int(lead_id)
 
@@ -712,6 +722,8 @@ def send_lead_to_dealer(lead_id):
 
                 # we already sent this one to the dealer, why are we seeing it again?
                 if verified_lead.sent_to_dealer:
+
+                    # log the result
                     logger.info('Lead ID: {} has already been sent to the dealer.  Task aborted!'.format(
                         verified_lead.id))
 
@@ -772,6 +784,8 @@ def send_lead_to_dealer(lead_id):
 
                         # got an exception from requests
                         except requests.HTTPError as http_err:
+
+                            # log the result
                             logger.warning('MailGun communication error: {}'.format(http_err))
 
                     else:
@@ -785,7 +799,6 @@ def send_lead_to_dealer(lead_id):
         else:
             # no lead id matching the query
             logger.info('Verified Lead ID: {} not found.  Task aborted!'.format(lead_id))
-            # revoke(task_id, terminate=True)
 
     except exc.SQLAlchemyError as err:
         print('Database error {}'.format(err))
@@ -820,7 +833,6 @@ def send_auto_adf_lead(lead_id):
 
                 # log this to the console and figure out why this task is here
                 logger.info('ADF already sent for Lead ID: {} Task Aborted!')
-                # revoke(task_id, terminate=True)
 
             else:
 
@@ -831,9 +843,10 @@ def send_auto_adf_lead(lead_id):
                     'and av.visitor = v.id and v.store_id = s.id and v.campaign_id = c.id and l.id = {}'.format(lead.id)
                 )
 
-                # we have a good result
+                # we have a good result, fetch the record
                 result = db.engine.execute(sql).fetchone()
 
+                # result is True
                 if result:
 
                     # the store must have a valid ADF email address
@@ -841,7 +854,7 @@ def send_auto_adf_lead(lead_id):
 
                         # create the payload
                         payload = {
-                            'from': 'ADF Lead <mail@mail.earlbdc.com>',
+                            'from': 'EARL ADF Lead <earl-auto@contactdms.com>',
                             'to': 'craigderington@python-development-systems.com',  # result[6],
                             #'cc': 'earl-email-validation@contactdms.com',
                             'subject': result[5] + ' ' + result[3] + ' DMS XML Lead',
@@ -849,7 +862,7 @@ def send_auto_adf_lead(lead_id):
                             '<?ADF VERSION="1.0"?>' +
                             '<adf>' +
                             '<prospect>' +
-                            '<requestdate>' + datetime.datetime.now.().strftime('%c') + '</requestdate>' +
+                            '<requestdate>' + datetime.datetime.now().strftime('%c') + '</requestdate>' +
                             '<vehicle interest="trade-in" status="used">' +
                             '<id sequence="1" source="' + result.store_name + ' ' + result.campaign_type + ' DMS"></id>' +
                             '<year>' + result.car_year + '</year>' +
@@ -922,12 +935,10 @@ def send_auto_adf_lead(lead_id):
                     # the store does not have an adf email configured.  can not send
                     else:
                         logger.info('Store ID: {} has no ADF email configured.  Task aborted'.format(result.store_id))
-                        # revoke(task_id, terminate=True)
 
                 # the query on the lead details returned None
                 else:
                     logger.info('Unable to retrieve lead details for Lead ID: {}.  Task aborted'.format(lead.id))
-                    # revoke(task_id, terminate=True)
 
             # return the lead id to the console
             return lead.id
@@ -935,9 +946,7 @@ def send_auto_adf_lead(lead_id):
         # the database can not find this record
         else:
             logger.info('Lead ID: {} was not found.  Task aborted!'.format(lead_id))
-            # revoke(task_id, terminate=True)
 
-    # oh, no, we have a serious problem now
     except exc.SQLAlchemyError as err:
         logger.critical('Database error {} occurred.  Task aborted!'.format(err))
 
