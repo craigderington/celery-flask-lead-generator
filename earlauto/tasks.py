@@ -541,7 +541,7 @@ def create_lead(appended_visitor_id):
 
             # next tasks >> send_lead_to_dealer, send_auto_adf_lead
             send_lead_to_dealer.delay(new_lead.id)
-            send_auto_adf_lead(new_lead.id)
+            send_auto_adf_lead.delay(new_lead.id)
 
         else:
             # log the result
