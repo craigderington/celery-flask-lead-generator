@@ -824,7 +824,7 @@ def send_auto_adf_lead(lead_id):
         # get our lead
         lead = Lead.query.filter(
             Lead.id == lead_id
-        )
+        ).one()
 
         if lead:
 
