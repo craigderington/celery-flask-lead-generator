@@ -85,6 +85,9 @@ class AppendedVisitor(db.Model):
     car_make = Column(String(255))
     car_model = Column(String(255))
     processed = Column(Boolean, default=False)
+    ppm_type = Column(String(10))
+    ppm_indicator = Column(String(10))
+    ppm_segment = Column(String(50))
 
     def __repr__(self):
         return '{} {}'.format(
