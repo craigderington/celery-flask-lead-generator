@@ -995,8 +995,68 @@ def resend_http_errors():
 
         else:
             # log the result
-            logger.info('There are zero http error records to send.  Back to sleep for 12 hours.  '
+            logger.info('There are zero M1 HTTP errors records to send.  Back to sleep for 12 hours.  '
                         'Good Morning & Good Night.')
+
+    except exc.SQLAlchemyError as err:
+
+        # log the result
+        logger.critical('The database returned error: {}'.format(str(err)))
+
+
+@celery.task(queue='send_leads', max_retries=3)
+def resend_leads_to_dealer():
+    """
+    Resend any Dealer Leads that resulted in an HTTP Error
+    :return: list
+    """
+
+    current_time = datetime.datetime.now()
+    four_hours_ago = current_time - datetime.timedelta(hours=4)
+    lead_counter = 0
+
+    try:
+
+        # get the leads to resend
+        leads = Lead.query.filter(and_(
+            Lead.email_validation_message.contains('NOT SENT'),
+            Lead.email_receipt_id.contains('HTTP Error')
+        )).all()
+
+        # check to make sure we have a valid data object
+        if leads:
+
+            # loop the list
+            for lead in leads:
+
+                # send the lead id back into the send_leads queue
+                if not lead.sent_to_dealer:
+
+                    send_lead_to_dealer.delay(lead.id)
+
+                    # reset the fields
+                    lead.email_receipt_id = None
+                    lead.email_validation_message = None
+                    db.session.commit()
+
+                    # log the result
+                    logger.info('Lead ID: {} was airdropped back into the send leads queue.'.format(lead.id))
+
+                    # increment the counter
+                    lead_counter += 1
+
+                else:
+
+                    # log the result
+                    logger.warning('Lead ID: {} email already sent to the dealer.  Task aborted!'.format(lead.id))
+
+            # return the count to the console
+            return lead_counter
+
+        else:
+
+            # log the result
+            logger.warning('There are zero HTTP Mail Error leads to re-add to the queue')
 
     except exc.SQLAlchemyError as err:
 
