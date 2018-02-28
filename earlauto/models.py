@@ -114,6 +114,10 @@ class Lead(db.Model):
     sent_adf = Column(Boolean, default=False)
     adf_email_receipt_id = Column(String(255))
     adf_email_validation_message = Column(String(50))
+    rvm_status = Column(String(20), nullable=True)
+    rvm_date = Column(DateTime)
+    rvm_message = Column(String(50))
+    rvm_sent = Column(Boolean, default=0, nullable=False)
 
     def __repr__(self):
         return '{}'.format(
