@@ -691,7 +691,7 @@ def send_lead_to_dealer(lead_id):
     :param lead_id:
     :return: MG response
     """
-    mailgun_url = 'https://api.mailgun.net/v3/{domain}/messages'
+    mailgun_url = 'https://api.mailgun.net/v3/mail.earlbdc.com/messages'
     mailgun_sandbox_url = 'https://api.mailgun.net/v3/sandbox3b609311624841c0bb2f9154e41e34de.mailgun.org/messages'
     mailgun_apikey = 'key-dfd370f4412eaccce27394f7bceaee0e'
 
@@ -748,7 +748,7 @@ def send_lead_to_dealer(lead_id):
 
                         # call mailgun and post the data payload
                         try:
-                            r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_apikey), data=payload)
+                            r = requests.post(mailgun_url, auth=('api', mailgun_apikey), data=payload)
 
                             # we have a good HTTP response
                             if r.status_code == 200:
@@ -823,9 +823,9 @@ def send_auto_adf_lead(lead_id):
     :return: lead_id
     """
 
-    task_id = celery.current_task.request.id
-    mailgun_sandbox_url = ''
-    mailgun_api_key = ''
+    mailgun_url = 'https://api.mailgun.net/v3/mail.earlbdc.com/messages'
+    mailgun_sandbox_url = 'https://api.mailgun.net/v3/sandbox3b609311624841c0bb2f9154e41e34de.mailgun.org/messages'
+    mailgun_apikey = 'key-dfd370f4412eaccce27394f7bceaee0e'
 
     if not isinstance(lead_id, int):
         lead_id = int(lead_id)
@@ -913,7 +913,7 @@ def send_auto_adf_lead(lead_id):
                         }
 
                         # call M1 and send the email as plan ascii text
-                        r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_api_key), data=payload)
+                        r = requests.post(mailgun_url, auth=('api', mailgun_api_key), data=payload)
 
                         # check the response code
                         if r.status_code == 200:
@@ -964,7 +964,162 @@ def send_auto_adf_lead(lead_id):
 
 @celery.task(queue='send_followups', max_retries=3)
 def send_followup_email(lead_id):
-    pass
+    """
+    Send the Lead Follow Up Email Including Campaign Creative
+    :param lead_id:
+    :return: mailgun response obj
+    """
+
+    mailgun_url = 'https://api.mailgun.net/v3/mail.earlbdc.com/messages'
+    mailgun_sandbox_url = 'https://api.mailgun.net/v3/sandbox3b609311624841c0bb2f9154e41e34de.mailgun.org/messages'
+    mailgun_apikey = 'key-dfd370f4412eaccce27394f7bceaee0e'
+
+    hdr = {
+        'user-agent': 'EARL Automation v.01',
+        'content-type': 'application/json'
+    }
+
+    if not isinstance(lead_id, int):
+        lead_id = int(lead_id)
+
+    # let's try and get some data, shall we...
+    try:
+        lead = Lead.query.filter(
+            Lead.id == lead_id
+        ).one()
+
+        # ok, do we have a lead object?
+        if lead:
+
+            # did we verify the email address
+            if lead.email_verified:
+
+                # if so, let get the appended visitor data too
+                av = AppendedVisitor.filter.query(
+                    AppendedVisitor.id == lead.appended_visitor_id
+                ).one()
+
+                # do we have an appended visitor?
+                if av:
+
+                    # does this lead have a verified email address
+                    if av.email:
+
+                        # great, get the rest of the data
+                        visitor = Visitor.query.filter(
+                            Visitor.id == av.visitor
+                        ).one()
+
+                        campaign = Campaign.query.filter(
+                            Campaign.id == visitor.campaign_id
+                        ).one()
+
+                        store = Store.query.filter(
+                            Store.id == campaign.store_id
+                        ).one()
+
+                        # sanity check
+                        if campaign.status == 'ACTIVE':
+
+                            # make sure we have creative
+                            if campaign.creative_header and campaign.creative_footer:
+
+                                creative_header = campaign.creative_header
+                                creative_footer = campaign.creative_footer
+                                body_text = str(av.first_name + ' ' + av.last_name)
+                                html = creative_header + body_text + creative_footer
+                                payload = {
+                                    "from": "",
+                                    "to": av.email,
+                                    "subject": campaign.email_subject,
+                                    "html": html,
+                                }
+
+                                # post the request to mailgun
+                                try:
+
+                                    # make the call
+                                    r = requests.post(mailgun_url, headers=hdr, auth=('api', mailgun_apikey), data=payload)
+
+                                    # process the response
+                                    if r.status_code == 200:
+                                        mg_response = r.json()
+
+                                        if 'id' in mg_response:
+                                            lead.processed = True
+                                            lead.followup_email = True
+                                            lead.followup_email_receipt_id = mg_response['id']
+                                            lead.followup_email_status = mg_response['message']
+                                            lead.followup_email_sent_date = datetime.datetime.now()
+                                            db.session.commit()
+
+                                            # log the result
+                                            logger.info('Lead ID: {} email sent to {} on {}'.format(
+                                                lead.id,
+                                                body_text,
+                                                datetime.datetime.now().strftime('%c')
+                                            ))
+
+                                    # we did not get a valid HTTP response
+                                    else:
+                                        # do we want to continue to re-try this task
+                                        lead.followup_email = False
+                                        lead.followup_email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
+                                        lead.followup_email_status = 'NOT SENT'
+                                        db.session.commit()
+
+                                        # log the result
+                                        logger.warning('Did not receive a valid HTTP Response from Mailgun.  '
+                                                       'Will retry in 5, 4, 3, 2, 1...')
+                                        print('MailGun Response: {}'.format(r.content))
+
+                                # got an exception from requests
+                                except requests.HTTPError as http_err:
+
+                                    # log the result
+                                    logger.warning('MailGun communication error: {}'.format(http_err))
+
+                            # no campaign creative
+                            else:
+                                # log the result
+                                logger.warning('Campaign ID: {} does not have campaign creative.  '
+                                               'Task Aborted!'.format(campaign.id))
+
+                        # campaign is not active
+                        else:
+                            # log the result
+                            logger.warning('Campaign {} is INACTIVE.  Who is in charge here?  Task Aborted!')
+
+                    # no valid email address
+                    else:
+                        # log the result
+                        logger.warning('Lead ID: {} does not have a valid and verified email address.  '
+                                       'Task Aborted!'.format(lead_id))
+
+                # no appended visitor record found, abort
+                else:
+                    # log the result
+                    logger.warning('Lead ID: {} has no related appended visitor to process this task.  '
+                                   'Task Aborted!'.format(lead_id))
+
+            # lead email not verified
+            else:
+                # log the result
+                logger.warning('Lead ID: {} email address has not yet been verified.  '
+                               'Airdropping to Verify Leads Task Queue...'.format(lead_id))
+
+                # airdrop
+                verify_lead.delay(lead_id)
+
+        # no lead found
+        else:
+            # log the result
+            logger.info('Lead ID: {} was not found.  Task Aborted!'.format(lead_id))
+
+    # ouch, hard database error.  he is...down... for... the ... count.
+    # it's all over ladies and gentlemen.
+    except exc.SQLAlchemyError as err:
+        logger.critical('Database threw a big fat error.  I\'m out!')
 
 
 @celery.task(queue='send_rvms', max_retries=3)
@@ -1051,6 +1206,7 @@ def send_rvm(lead_id):
                                 resp = r.json()['result']
                                 result = str(resp).encode('utf-8')
 
+                                # is the response object a dict?
                                 if isinstance(resp, dict):
 
                                     # set up the results to commit
@@ -1071,6 +1227,7 @@ def send_rvm(lead_id):
                                         lead.id, rvm_campaign_id, rvm_phone, current_time
                                     ))
 
+                            # uh oh, we got a DNC response
                             elif r.status_code == 403:
 
                                 resp = r.json()

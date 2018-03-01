@@ -118,6 +118,9 @@ class Lead(db.Model):
     rvm_date = Column(DateTime)
     rvm_message = Column(String(50))
     rvm_sent = Column(Boolean, default=0, nullable=False)
+    followup_email_sent_date = Column(DateTime)
+    followup_email_receipt_id = Column(String(255), nullable=True, default='NOID')
+    followup_email_status = Column(String(50), nullable=True, default='NOTSENT')
 
     def __repr__(self):
         return '{}'.format(
@@ -187,6 +190,12 @@ class Campaign(db.Model):
     pixeltrackers_id = Column(Integer, ForeignKey('pixeltrackers.id'))
     pixeltracker = relationship("PixelTracker")
     client_id = Column(String(20))
+    creative_header = Column(Text)
+    creative_footer = Column(Text)
+    email_subject = Column(String(255))
+    rvm_campaign_id = Column(Integer, unique=True, nullable=True, default=0)
+    rvm_send_count = Column(Integer, default=0)
+    rvm_limit = Column(Integer, nullable=False, default=10000)
 
     def __repr__(self):
         return '{}'.format(
@@ -208,3 +217,13 @@ class PixelTracker(db.Model):
         return '{}'.format(
             self.name
         )
+
+
+class Contact(Base):
+    __tablename__ = 'contacts'
+    id = Column(Integer, primary_key=True)
+    store_id = Column(Integer, ForeignKey('stores.id'))
+    first_name = Column(String(255), nullable=False)
+    last_name = Column(String(255), nullable=False)
+    email = Column(String(255), unique=True, nullable=False)
+    mobile = Column(String(255), unique=True, nullable=False)
