@@ -1,5 +1,4 @@
 import datetime
-import random
 import time
 import pymongo
 import config
@@ -8,10 +7,9 @@ import GeoIP
 import requests
 from celery.signals import task_postrun
 from celery.utils.log import get_task_logger
-from celery.task.control import revoke
 from earlauto import celery, db
 from earlauto.models import Visitor, Campaign, AppendedVisitor, Store, Lead
-from sqlalchemy import and_, or_
+from sqlalchemy import and_
 from sqlalchemy import exc
 from sqlalchemy import text
 
