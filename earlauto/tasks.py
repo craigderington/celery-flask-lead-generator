@@ -725,9 +725,15 @@ def send_lead_to_dealer(lead_id):
             else:
 
                 # do some raw sql to get the store notification email and the campaign name
-                sql = text('select l.id, c.id, c.name, c.status, s.id as store_id, s.notification_email, av.* from leads l, '
-                           'campaigns c, stores s, appendedvisitors av, visitors v where l.appended_visitor_id = av.id '
-                           'and av.visitor = v.id and v.store_id = s.id and v.campaign_id = c.id and l.id = {}'.format(verified_lead.id))
+                sql = text('select l.id as lead_id, c.id as campaign_id, c.name, c.status, s.id as store_id, '
+                           's.notification_email, av.first_name, av.last_name, av.email, av.home_phone, av.address1, '
+                           'av.address2, av.city, av.state, av.zip_code, av.zip_4, av.credit_range, av.car_year, '
+                           'av.car_make, av.car_model '
+                           'from leads l, campaigns c, stores s, appendedvisitors av, visitors v '
+                           'where l.appended_visitor_id = av.id '
+                           'and av.visitor = v.id and v.store_id = s.id '
+                           'and v.campaign_id = c.id '
+                           'and l.id = {}'.format(verified_lead.id))
 
                 # we have a good result
                 result = db.engine.execute(sql).fetchone()
@@ -736,11 +742,25 @@ def send_lead_to_dealer(lead_id):
 
                     if result[5] and result[2]:
 
+                        text_body = "New EARL Lead:\n\nFirst Name: " + str(result[6]) + "Last Name: " + str(result[7]) \
+                                    + "\n" \
+                                    + "Email: " + str(result[8]) + "\n" \
+                                    + "Phone #: " + str(result[9]) + "\n" \
+                                    + "Street Address: " + str(result[10]) + "\n" \
+                                    + "City, State, Zip: " \
+                                    + str(result[12]) + ", " + str(result[13]) + " " + str(result[14]) \
+                                    + "\n\n" \
+                                    + "Credit Range: " + str(result[16]) + "\n" \
+                                    + "Auto Details: " \
+                                    + str(result[17]) + " " + str(result[18]) + " " + str(result[19]) \
+                                    + "\n" \
+                                    + "Campaign: " + str(result[2])
+
                         payload = {
                             "from": "Craig Derington <craig@craigderington.me>",
                             "to": "craigderington@python-development-systems.com",
                             "subject": result[2],
-                            "html": '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/> <meta http-equiv="X-UA-Compatible" content="IE=edge"/> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title></title> <style type="text/css">@media screen and (max-width: 400px){.two-column .column, .three-column .column{max-width: 100% !important;}.two-column img{max-width: 100% !important;}.three-column img{max-width: 50% !important;}}@media screen and (min-width: 401px) and (max-width: 620px){.three-column .column{max-width: 33% !important;}.two-column .column{max-width: 50% !important;}}</style><!--[if (gte mso 9)|(IE)]> <style type="text/css"> table{border-collapse: collapse !important !important;}</style><![endif]--></head><body style="margin-top:0 !important;margin-bottom:0 !important;margin-right:0 !important;margin-left:0 !important;padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;background-color:#ffffff;" ><center class="wrapper" style="width:100%;table-layout:fixed;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;" ><!--[if (gte mso 9)|(IE)]><table width="600" align="center" style="border-spacing:0;font-family:sans-serif;color:#333333;" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;" ><![endif]--><table class="outer" align="center" style="border-spacing:0;font-family:sans-serif;color:#333333;Margin:0 auto;width:100%;max-width:600px;" cellpadding="0" cellspacing="0" border="0"><tr> <td class="full-width-image" style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;" ><table align="center" style="text-align: left; border: 1px solid black; width: 100%; margin-top: 25px;"><tr style="text-align: center;"><td>' + '<b>' + '</b>' + '</td></tr><tr><td> <b>First Name:</b> ' + result[9] + '</td><td> <b>Last Name: </b>' + result[10] + '</td></tr><tr><td> <b>Email:</b> ' + result[11] + '</td><td> <b>Phone Number: </b>' + result[12] + '</td></tr><tr> <b>Street Address: </b>' + result[14] + '</td><td> <b>City:</b> ' + result[16] + '</td><td> <b>State:</b> ' + result[17] + ' </td><td><b>Zip Code:</b> ' + result[18] + '</td></tr><tr><td> <b>Credit Range:</b> ' + result[20] + '</td></tr><tr><td> <b>Auto Year: </b>' + result[21] + '</td><td><b> Auto Make: </b>' + result[22] + '</td><td><b> Auto Model: </b>' + result[23] + '</td></tr><tr><td><b> Campaign: </b>' + result[1] + '</td></tr></table></td></tr></table></center></body></html>',
+                            "text": text_body,
                             "o:tracking": "False",
                         }
 
