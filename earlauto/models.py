@@ -196,6 +196,7 @@ class Campaign(db.Model):
     rvm_campaign_id = Column(Integer, unique=True, nullable=True, default=0)
     rvm_send_count = Column(Integer, default=0)
     rvm_limit = Column(Integer, nullable=False, default=10000)
+    adf_subject = Column(String(255))
 
     def __repr__(self):
         return '{}'.format(
@@ -219,11 +220,12 @@ class PixelTracker(db.Model):
         )
 
 
-class Contact(Base):
+class Contact(db.Model):
     __tablename__ = 'contacts'
     id = Column(Integer, primary_key=True)
     store_id = Column(Integer, ForeignKey('stores.id'))
     first_name = Column(String(255), nullable=False)
     last_name = Column(String(255), nullable=False)
+    title = Column(String(50), nullable=True)
     email = Column(String(255), unique=True, nullable=False)
     mobile = Column(String(255), unique=True, nullable=False)

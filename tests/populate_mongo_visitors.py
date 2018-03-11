@@ -141,7 +141,7 @@ def main():
 
         # print the send hash to the console
         print('IP {} record created.  ID: {} Send Hash: {}'.format(ip_addr, new_record, send_hash))
-        time.sleep(0.005)
+        time.sleep(0.00005)
         line_counter += 1
 
     # output total lines
