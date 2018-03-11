@@ -742,7 +742,7 @@ def send_lead_to_dealer(lead_id):
 
                     if result[5] and result[2]:
 
-                        text_body = "New EARL Lead:\n\nFirst Name: " + str(result[6]) + "Last Name: " + str(result[7]) \
+                        text_body = "New EARL Lead:\n\n Name: " + str(result[6]) + " " + str(result[7]) \
                                     + "\n" \
                                     + "Email: " + str(result[8]) + "\n" \
                                     + "Phone #: " + str(result[9]) + "\n" \
