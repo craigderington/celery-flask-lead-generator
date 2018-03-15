@@ -8,7 +8,7 @@ import requests
 from celery.signals import task_postrun
 from celery.utils.log import get_task_logger
 from earlauto import celery, db
-from earlauto.models import Visitor, Campaign, AppendedVisitor, Store, Lead
+from earlauto.models import Visitor, Campaign, CampaignType, AppendedVisitor, Store, Lead
 from sqlalchemy import and_
 from sqlalchemy import exc
 from sqlalchemy import text
@@ -886,6 +886,11 @@ def send_auto_adf_lead(lead_id):
                 # result is True
                 if result:
 
+                    campaign_type_id = result[3]
+                    campaign_type = CampaignType.query.filter(
+                        CampaignType.id == campaign_type_id
+                    ).one()
+
                     # the store must have a valid ADF email address
                     if result[6]:
 
@@ -893,15 +898,15 @@ def send_auto_adf_lead(lead_id):
                         payload = {
                             'from': 'EARL ADF Lead <earl-auto@contactdms.com>',
                             'to': result[6],
-                            #'cc': 'earl-email-validation@contactdms.com',
-                            'subject': str(result[5]) + ' ' + str(result[3]) + ' DMS XML Lead',
+                            # 'cc': 'earl-email-validation@contactdms.com',
+                            'subject': str(result[5]) + ' ' + campaign_type.name + ' DMS XML Lead',
                             'text': '<?xml version="1.0" encoding="UTF-8"?>' +
                             '<?ADF VERSION="1.0"?>' +
                             '<adf>' +
                             '<prospect>' +
                             '<requestdate>' + datetime.datetime.now().strftime('%c') + '</requestdate>' +
                             '<vehicle interest="trade-in" status="used">' +
-                            '<id sequence="1" source="' + result[5] + ' ' + result[3] + ' DMS"></id>' +
+                            '<id sequence="1" source="' + result[5] + ' ' + campaign_type.name + ' DMS"></id>' +
                             '<year>' + str(result[16]) + '</year>' +
                             '<make>' + str(result[18]) + '</make>' +
                             '<model>' + str(result[17]) + '</model>' +
@@ -921,15 +926,15 @@ def send_auto_adf_lead(lead_id):
                             '<comments>Estimated Credit: ' + str(result[15]) + '</comments>' +
                             '</customer>' +
                             '<vendor>' +
-                            '<id source="' + str(result[5]) + ' DMS">' + str(result[5]) + ' ' + str(result[3]) + ' DMS</id>' +
+                            '<id source="' + str(result[5]) + ' DMS">' + str(result[5]) + ' ' + campaign_type.name + ' DMS</id>' +
                             '<vendorname>' + str(result[5]) + '</vendorname>' +
                             '<contact>' +
                             '<name part="full">' + str(result[5]) + '</name>' +
                             '</contact>' +
                             '</vendor>' +
                             '<provider>' +
-                            '<name part="full">' + str(result[5]) + ' ' + str(result[3]) + ' DMS</name>' +
-                            '<service>' + str(result[5]) + ' ' + str(result[3]) + ' DMS</service>' +
+                            '<name part="full">' + str(result[5]) + ' ' + campaign_type.name + ' DMS</name>' +
+                            '<service>' + str(result[5]) + ' ' + campaign_type.name + ' DMS</service>' +
                             '<url>None</url>' +
                             '</provider>' +
                             '<leadtype>digital plus</leadtype>' +
