@@ -642,7 +642,7 @@ def verify_lead(new_lead_id):
                                     ))
 
                                     # call the next task in the process
-                                    # send_followup_email.delay(newlead.id)
+                                    send_followup_email.delay(newlead.id)
 
                                 else:
                                     # lead email is undeliverable
