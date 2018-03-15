@@ -873,7 +873,9 @@ def send_auto_adf_lead(lead_id):
 
                 # do some raw sql to get the store notification email and the campaign name
                 sql = text(
-                    'select l.id, c.id, c.name, c.type, s.id as store_id, s.name as store_name, s.adf_email, av.* '
+                    'select l.id, c.id, c.name, c.type, s.id as store_id, s.name as store_name, s.adf_email, av.first_name, '
+                    'av.last_name, av.address1, av.city, av.state, av.zip_code, av.email, av.phone, av.credit_range, '
+                    'av.car_year, av.car_model, av.car_make, '
                     'from leads l, campaigns c, stores s, appendedvisitors av, visitors v where l.appended_visitor_id = av.id '
                     'and av.visitor = v.id and v.store_id = s.id and v.campaign_id = c.id and l.id = {}'.format(lead.id)
                 )
@@ -892,42 +894,42 @@ def send_auto_adf_lead(lead_id):
                             'from': 'EARL ADF Lead <earl-auto@contactdms.com>',
                             'to': result[6],
                             #'cc': 'earl-email-validation@contactdms.com',
-                            'subject': result[5] + ' ' + result[3] + ' DMS XML Lead',
+                            'subject': str(result[5]) + ' ' + str(result[3]) + ' DMS XML Lead',
                             'text': '<?xml version="1.0" encoding="UTF-8"?>' +
                             '<?ADF VERSION="1.0"?>' +
                             '<adf>' +
                             '<prospect>' +
                             '<requestdate>' + datetime.datetime.now().strftime('%c') + '</requestdate>' +
                             '<vehicle interest="trade-in" status="used">' +
-                            '<id sequence="1" source="' + result.store_name + ' ' + result.campaign_type + ' DMS"></id>' +
-                            '<year>' + result.car_year + '</year>' +
-                            '<make>' + result.car_make + '</make>' +
-                            '<model>' + result.car_model + '</model>' +
+                            '<id sequence="1" source="' + result[5] + ' ' + result[3] + ' DMS"></id>' +
+                            '<year>' + result[16] + '</year>' +
+                            '<make>' + result[18] + '</make>' +
+                            '<model>' + result[17] + '</model>' +
                             '</vehicle>' +
                             '<customer>' +
                             '<contact>' +
-                            '<name part="full">' + result.first_name + ' ' + result.last_name + '</name>' +
+                            '<name part="full">' + result[7] + ' ' + result[8] + '</name>' +
                             '<address type="home">' +
-                            '<street>' + result.address.address_1 + '</street>' +
-                            '<city>' + result.address.city + '</city>' +
-                            '<regioncode>' + result.address.state + '</regioncode>' +
-                            '<postalcode>' + result.address.zip_code + '</postalcode>' +
+                            '<street>' + result[9] + '</street>' +
+                            '<city>' + result[10] + '</city>' +
+                            '<regioncode>' + result[11] + '</regioncode>' +
+                            '<postalcode>' + result[12] + '</postalcode>' +
                             '</address>' +
-                            '<email>' + result.email + '</email>' +
-                            '<phone>' + result.cell_phone + '</phone>' +
+                            '<email>' + result[13] + '</email>' +
+                            '<phone>' + result[14] + '</phone>' +
                             '</contact>' +
-                            '<comments>Estimated Credit: ' + result.credit_range + '</comments>' +
+                            '<comments>Estimated Credit: ' + result[15] + '</comments>' +
                             '</customer>' +
                             '<vendor>' +
-                            '<id source="' + result.store_name + ' DMS">' + result.store_name + ' ' + result.campaign_type + ' DMS</id>' +
-                            '<vendorname>' + result.store_name + '</vendorname>' +
+                            '<id source="' + result[5] + ' DMS">' + result[5] + ' ' + result[3] + ' DMS</id>' +
+                            '<vendorname>' + result[5] + '</vendorname>' +
                             '<contact>' +
-                            '<name part="full">' + result.store_name + '</name>' +
+                            '<name part="full">' + result[5] + '</name>' +
                             '</contact>' +
                             '</vendor>' +
                             '<provider>' +
-                            '<name part="full">' + result.store_name + ' ' + result.campaign_type + ' DMS</name>' +
-                            '<service>' + result.store_name + ' ' + result.campaign_type + ' DMS</service>' +
+                            '<name part="full">' + result[5] + ' ' + result[3] + ' DMS</name>' +
+                            '<service>' + result[5] + ' ' + result[3] + ' DMS</service>' +
                             '<url>None</url>' +
                             '</provider>' +
                             '<leadtype>digital plus</leadtype>' +
