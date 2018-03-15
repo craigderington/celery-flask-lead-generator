@@ -874,7 +874,7 @@ def send_auto_adf_lead(lead_id):
                 # do some raw sql to get the store notification email and the campaign name
                 sql = text(
                     'select l.id, c.id, c.name, c.type, s.id as store_id, s.name as store_name, s.adf_email, av.first_name, '
-                    'av.last_name, av.address1, av.city, av.state, av.zip_code, av.email, av.phone, av.credit_range, '
+                    'av.last_name, av.address1, av.city, av.state, av.zip_code, av.email, av.home_phone, av.credit_range, '
                     'av.car_year, av.car_model, av.car_make '
                     'from leads l, campaigns c, stores s, appendedvisitors av, visitors v where l.appended_visitor_id = av.id '
                     'and av.visitor = v.id and v.store_id = s.id and v.campaign_id = c.id and l.id = {}'.format(lead.id)
