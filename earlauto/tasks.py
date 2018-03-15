@@ -902,34 +902,34 @@ def send_auto_adf_lead(lead_id):
                             '<requestdate>' + datetime.datetime.now().strftime('%c') + '</requestdate>' +
                             '<vehicle interest="trade-in" status="used">' +
                             '<id sequence="1" source="' + result[5] + ' ' + result[3] + ' DMS"></id>' +
-                            '<year>' + result[16] + '</year>' +
-                            '<make>' + result[18] + '</make>' +
-                            '<model>' + result[17] + '</model>' +
+                            '<year>' + str(result[16]) + '</year>' +
+                            '<make>' + str(result[18]) + '</make>' +
+                            '<model>' + str(result[17]) + '</model>' +
                             '</vehicle>' +
                             '<customer>' +
                             '<contact>' +
                             '<name part="full">' + result[7] + ' ' + result[8] + '</name>' +
                             '<address type="home">' +
-                            '<street>' + result[9] + '</street>' +
-                            '<city>' + result[10] + '</city>' +
-                            '<regioncode>' + result[11] + '</regioncode>' +
-                            '<postalcode>' + result[12] + '</postalcode>' +
+                            '<street>' + str(result[9]) + '</street>' +
+                            '<city>' + str(result[10]) + '</city>' +
+                            '<regioncode>' + str(result[11]) + '</regioncode>' +
+                            '<postalcode>' + str(result[12]) + '</postalcode>' +
                             '</address>' +
-                            '<email>' + result[13] + '</email>' +
-                            '<phone>' + result[14] + '</phone>' +
+                            '<email>' + str(result[13]) + '</email>' +
+                            '<phone>' + str(result[14]) + '</phone>' +
                             '</contact>' +
-                            '<comments>Estimated Credit: ' + result[15] + '</comments>' +
+                            '<comments>Estimated Credit: ' + str(result[15]) + '</comments>' +
                             '</customer>' +
                             '<vendor>' +
-                            '<id source="' + result[5] + ' DMS">' + result[5] + ' ' + result[3] + ' DMS</id>' +
-                            '<vendorname>' + result[5] + '</vendorname>' +
+                            '<id source="' + str(result[5]) + ' DMS">' + str(result[5]) + ' ' + str(result[3]) + ' DMS</id>' +
+                            '<vendorname>' + str(result[5]) + '</vendorname>' +
                             '<contact>' +
-                            '<name part="full">' + result[5] + '</name>' +
+                            '<name part="full">' + str(result[5]) + '</name>' +
                             '</contact>' +
                             '</vendor>' +
                             '<provider>' +
-                            '<name part="full">' + result[5] + ' ' + result[3] + ' DMS</name>' +
-                            '<service>' + result[5] + ' ' + result[3] + ' DMS</service>' +
+                            '<name part="full">' + str(result[5]) + ' ' + str(result[3]) + ' DMS</name>' +
+                            '<service>' + str(result[5]) + ' ' + str(result[3]) + ' DMS</service>' +
                             '<url>None</url>' +
                             '</provider>' +
                             '<leadtype>digital plus</leadtype>' +
