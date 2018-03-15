@@ -1163,7 +1163,7 @@ def send_rvm(lead_id):
 
     hdr = {
         'user-agent': 'EARL Automation v.01',
-        'content-type': 'application.json'
+        'content-type': 'application/json'
     }
 
     # RVM settings
