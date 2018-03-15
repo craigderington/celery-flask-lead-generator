@@ -757,8 +757,8 @@ def send_lead_to_dealer(lead_id):
                                     + "Campaign: " + str(result[2])
 
                         payload = {
-                            "from": "Craig Derington <craig@craigderington.me>",
-                            "to": "craigderington@python-development-systems.com",
+                            "from": "EARL Automation<earl@earlbdc.com>",
+                            "to": result[5],
                             "subject": result[2],
                             "text": text_body,
                             "o:tracking": "False",
@@ -766,7 +766,7 @@ def send_lead_to_dealer(lead_id):
 
                         # call mailgun and post the data payload
                         try:
-                            r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_apikey), data=payload)
+                            r = requests.post(mailgun_url, auth=('api', mailgun_apikey), data=payload)
 
                             # we have a good HTTP response
                             if r.status_code == 200:
@@ -883,7 +883,7 @@ def send_auto_adf_lead(lead_id):
                         # create the payload
                         payload = {
                             'from': 'EARL ADF Lead <earl-auto@contactdms.com>',
-                            'to': 'craigderington@python-development-systems.com',  # result[6],
+                            'to': result[6],
                             #'cc': 'earl-email-validation@contactdms.com',
                             'subject': result[5] + ' ' + result[3] + ' DMS XML Lead',
                             'text': '<?xml version="1.0" encoding="UTF-8"?>' +
@@ -931,7 +931,7 @@ def send_auto_adf_lead(lead_id):
                         }
 
                         # call M1 and send the email as plan ascii text
-                        r = requests.post(mailgun_url, auth=('api', mailgun_api_key), data=payload)
+                        r = requests.post(mailgun_url, auth=('api', mailgun_apikey), data=payload)
 
                         # check the response code
                         if r.status_code == 200:
@@ -1047,7 +1047,7 @@ def send_followup_email(lead_id):
                                 body_text = str(av.first_name + ' ' + av.last_name)
                                 html = creative_header + body_text + creative_footer
                                 payload = {
-                                    "from": "",
+                                    "from": store.notification_email,
                                     "to": av.email,
                                     "subject": campaign.email_subject,
                                     "html": html,
@@ -1148,6 +1148,7 @@ def send_rvm(lead_id):
     :return:
     """
     dialercentral_url = 'https://webhooks.ivr-platform.com/rvm/ondemand'
+
     hdr = {
         'user-agent': 'EARL Automation v.01',
         'content-type': 'application.json'
