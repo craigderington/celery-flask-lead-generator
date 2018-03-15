@@ -82,14 +82,11 @@ def get_new_visitors():
             for item in data:
                 m_id = item['_id']
 
-                if len(item['ip']) <= 15:
-                    item['ip'] = item['ip']
-                else:
-                    if ',' in item['ip']:
-                        str_ip = item['ip'].split(',')
-                        item['ip'] = str_ip[0]
-                    elif ':' in item['ip']:
-                        item['ip'] = "0.0.0.0"
+                if item['ip'][-2:] == "::":
+                    item['ip'] = "0.0.0.0"
+                elif len(item['ip']) > 15:
+                    str_ip = item['ip'].strip(',')
+                    item['ip'] = str_ip[0]
 
                 # check the IP against the local MySQL database
                 # if visitor_exists returns True, increment the
