@@ -1008,7 +1008,7 @@ def send_followup_email(lead_id):
 
     hdr = {
         'user-agent': 'EARL Automation v.01',
-        'content-type': 'application/json'
+        'content-type': 'x-www-form-urlencoded'
     }
 
     if not isinstance(lead_id, int):
@@ -1061,7 +1061,7 @@ def send_followup_email(lead_id):
                                 body_text = str(av.first_name + ' ' + av.last_name)
                                 html = creative_header + body_text + creative_footer
                                 payload = {
-                                    "from": 'EARL Automation<info@earlbdc.com>', # store.notification_email,
+                                    "from": 'EARL Automation<info@earlbdc.com>',  # store.notification_email,
                                     "to": av.email,
                                     "subject": campaign.email_subject,
                                     "html": html,
