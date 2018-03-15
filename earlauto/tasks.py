@@ -1006,11 +1006,6 @@ def send_followup_email(lead_id):
     mailgun_sandbox_url = 'https://api.mailgun.net/v3/sandbox3b609311624841c0bb2f9154e41e34de.mailgun.org/messages'
     mailgun_apikey = 'key-dfd370f4412eaccce27394f7bceaee0e'
 
-    hdr = {
-        'user-agent': 'EARL Automation v.01',
-        'content-type': 'x-www-form-urlencoded'
-    }
-
     if not isinstance(lead_id, int):
         lead_id = int(lead_id)
 
@@ -1061,7 +1056,7 @@ def send_followup_email(lead_id):
                                 body_text = str(av.first_name + ' ' + av.last_name)
                                 html = creative_header + body_text + creative_footer
                                 payload = {
-                                    "from": 'EARL Automation <mail@mail.earlbdc.com>',  # store.notification_email,
+                                    "from": "EARL Automation <mailgun@earlbdc.com>",
                                     "to": av.email,
                                     "subject": campaign.email_subject,
                                     "html": html,
@@ -1071,7 +1066,7 @@ def send_followup_email(lead_id):
                                 try:
 
                                     # make the call
-                                    r = requests.post(mailgun_url, headers=hdr, auth=('api', mailgun_apikey), data=payload)
+                                    r = requests.post(mailgun_url, auth=('api', mailgun_apikey), data=payload)
 
                                     # process the response
                                     if r.status_code == 200:
