@@ -1087,6 +1087,9 @@ def send_followup_email(lead_id):
                                                 datetime.datetime.now().strftime('%c')
                                             ))
 
+                                            # send the rvm
+                                            send_rvm.delay(lead_id)
+
                                     # we did not get a valid HTTP response
                                     else:
                                         # do we want to continue to re-try this task
