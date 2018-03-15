@@ -1027,7 +1027,7 @@ def send_followup_email(lead_id):
             if lead.email_verified:
 
                 # if so, let get the appended visitor data too
-                av = AppendedVisitor.filter.query(
+                av = AppendedVisitor.query.filter(
                     AppendedVisitor.id == lead.appended_visitor_id
                 ).one()
 
