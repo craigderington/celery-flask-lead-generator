@@ -81,6 +81,11 @@ def get_new_visitors():
 
             for item in data:
                 m_id = item['_id']
+
+                if len(item['ip']) > 15:
+                    str_ip = item['ip'].split(',')
+                    item['ip'] = str_ip[0]
+
                 # check the IP against the local MySQL database
                 # if visitor_exists returns True, increment the
                 # counter and skip creating the new visitor
