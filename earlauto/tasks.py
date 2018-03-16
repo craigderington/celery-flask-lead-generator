@@ -896,50 +896,50 @@ def send_auto_adf_lead(lead_id):
 
                         # create the payload
                         payload = {
-                            'from': 'EARL ADF Lead <earl-auto@contactdms.com>',
-                            'to': result[6],
-                            # 'cc': 'earl-email-validation@contactdms.com',
-                            'subject': str(result[5]) + ' ' + campaign_type.name + ' DMS XML Lead',
-                            'text': '<?xml version="1.0" encoding="UTF-8"?>' +
-                            '<?ADF VERSION="1.0"?>' +
-                            '<adf>' +
-                            '<prospect>' +
-                            '<requestdate>' + datetime.datetime.now().strftime('%c') + '</requestdate>' +
-                            '<vehicle interest="trade-in" status="used">' +
+                            "from": "EARL Automation<earl@earlbdc.com>",
+                            "to": [str(result[6]), ],
+                            "cc": "earl-email-validation@contactdms.com",
+                            "subject": str(result[5]) + ' ' + campaign_type.name + ' DMS XML Lead',
+                            "text": "<?xml version='1.0' encoding='UTF-8'?>" +
+                            "<?ADF VERSION='1.0'?>" +
+                            "<adf>" +
+                            "<prospect>" +
+                            "<requestdate>" + datetime.datetime.now().strftime("%c") + "</requestdate>" +
+                            "<vehicle interest='trade-in' status='used'>" +
                             '<id sequence="1" source="' + result[5] + ' ' + campaign_type.name + ' DMS"></id>' +
-                            '<year>' + str(result[16]) + '</year>' +
-                            '<make>' + str(result[18]) + '</make>' +
-                            '<model>' + str(result[17]) + '</model>' +
-                            '</vehicle>' +
-                            '<customer>' +
-                            '<contact>' +
-                            '<name part="full">' + result[7] + ' ' + result[8] + '</name>' +
-                            '<address type="home">' +
-                            '<street>' + str(result[9]) + '</street>' +
-                            '<city>' + str(result[10]) + '</city>' +
-                            '<regioncode>' + str(result[11]) + '</regioncode>' +
-                            '<postalcode>' + str(result[12]) + '</postalcode>' +
-                            '</address>' +
-                            '<email>' + str(result[13]) + '</email>' +
-                            '<phone>' + str(result[14]) + '</phone>' +
-                            '</contact>' +
-                            '<comments>Estimated Credit: ' + str(result[15]) + '</comments>' +
-                            '</customer>' +
+                            "<year>" + str(result[16]) + "</year>" +
+                            "<make>" + str(result[18]) + "</make>" +
+                            "<model>" + str(result[17]) + "</model>" +
+                            "</vehicle>" +
+                            "<customer>" +
+                            "<contact>" +
+                            "<name part='full'>" + result[7] + ' ' + result[8] + "</name>" +
+                            "<address type='home'>" +
+                            "<street>" + str(result[9]) + "</street>" +
+                            "<city>" + str(result[10]) + "</city>" +
+                            "<regioncode>" + str(result[11]) + "</regioncode>" +
+                            "<postalcode>" + str(result[12]) + "</postalcode>" +
+                            "</address>" +
+                            "<email>" + str(result[13]) + "</email>" +
+                            "<phone>" + str(result[14]) + "</phone>" +
+                            "</contact>" +
+                            "<comments>Estimated Credit: " + str(result[15]) + "</comments>" +
+                            "</customer>" +
                             '<vendor>' +
                             '<id source="' + str(result[5]) + ' DMS">' + str(result[5]) + ' ' + campaign_type.name + ' DMS</id>' +
-                            '<vendorname>' + str(result[5]) + '</vendorname>' +
-                            '<contact>' +
-                            '<name part="full">' + str(result[5]) + '</name>' +
-                            '</contact>' +
-                            '</vendor>' +
-                            '<provider>' +
-                            '<name part="full">' + str(result[5]) + ' ' + campaign_type.name + ' DMS</name>' +
-                            '<service>' + str(result[5]) + ' ' + campaign_type.name + ' DMS</service>' +
-                            '<url>None</url>' +
-                            '</provider>' +
-                            '<leadtype>digital plus</leadtype>' +
-                            '</prospect>' +
-                            '</adf>',
+                            "<vendorname>" + str(result[5]) + "</vendorname>" +
+                            "<contact>" +
+                            "<name part='full'>" + str(result[5]) + "</name>" +
+                            "</contact>" +
+                            "</vendor>" +
+                            "<provider>" +
+                            "<name part='full'>" + str(result[5]) + ' ' + campaign_type.name + " DMS</name>" +
+                            "<service>" + str(result[5]) + ' ' + campaign_type.name + " DMS</service>" +
+                            "<url>None</url>" +
+                            "</provider>" +
+                            "<leadtype>digital plus</leadtype>" +
+                            "</prospect>" +
+                            "</adf>",
                             "o:tag": 'ADF CRM email',
                             "o:tracking": 'False',
                         }
