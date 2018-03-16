@@ -904,16 +904,16 @@ def send_auto_adf_lead(lead_id):
                             "<?ADF VERSION='1.0'?>" +
                             "<adf>" +
                             "<prospect>" +
-                            "<requestdate>" + datetime.datetime.now().strftime("%c") + "</requestdate>" +
+                            "<requestdate>" + datetime.datetime.now().strftime("%x") + "</requestdate>" +
                             "<vehicle interest='trade-in' status='used'>" +
-                            '<id sequence="1" source="' + result[5] + ' ' + campaign_type.name + ' DMS"></id>' +
+                            '<id sequence="1" source="' + str(result[5]) + ' ' + campaign_type.name + ' DMS"></id>' +
                             "<year>" + str(result[16]) + "</year>" +
                             "<make>" + str(result[18]) + "</make>" +
                             "<model>" + str(result[17]) + "</model>" +
                             "</vehicle>" +
                             "<customer>" +
                             "<contact>" +
-                            "<name part='full'>" + result[7] + ' ' + result[8] + "</name>" +
+                            "<name part='full'>" + str(result[7]) + ' ' + str(result[8]) + "</name>" +
                             "<address type='home'>" +
                             "<street>" + str(result[9]) + "</street>" +
                             "<city>" + str(result[10]) + "</city>" +
