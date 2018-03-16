@@ -3,6 +3,7 @@ import time
 import pymongo
 import config
 import json
+import csv
 import GeoIP
 import requests
 from celery.signals import task_postrun
@@ -12,6 +13,7 @@ from earlauto.models import Visitor, Campaign, CampaignType, AppendedVisitor, St
 from sqlalchemy import and_
 from sqlalchemy import exc
 from sqlalchemy import text
+from io import StringIO
 
 # set up our logger utility
 logger = get_task_logger(__name__)
@@ -896,8 +898,8 @@ def send_auto_adf_lead(lead_id):
 
                         # create the payload
                         payload = {
-                            "from": "EARL Automation<earl@earlbdc.com>",
-                            "to": [str(result[6]), ],
+                            "from": "EARL ADF Lead <mailgun@earlbdc.com>",
+                            "to": str(result[6]),
                             "cc": "earl-email-validation@contactdms.com",
                             "subject": str(result[5]) + ' ' + campaign_type.name + ' DMS XML Lead',
                             "text": "<?xml version='1.0' encoding='UTF-8'?>" +
@@ -1214,94 +1216,99 @@ def send_rvm(lead_id):
                         rvm_campaign_id = campaign.rvm_campaign_id
                         rvm_send_count = campaign.rvm_send_count
 
-                        # sanity check
-                        if campaign.status == 'ACTIVE':
+                        if rvm_campaign_id:
 
-                            # dude, here, lift this
-                            payload = {
-                                "webhook_key": "84ea4ff53a8e4a16a4f985e74ff4f547",
-                                "rvm_id": rvm_campaign_id,
-                                "scrub_nat_dnc": "true",
-                                "lead": {
-                                    "lead_phone": rvm_phone
+                            # sanity check
+                            if campaign.status == 'ACTIVE' and rvm_campaign_id != 0:
+
+                                # dude, here, lift this
+                                payload = {
+                                    "webhook_key": "84ea4ff53a8e4a16a4f985e74ff4f547",
+                                    "rvm_id": rvm_campaign_id,
+                                    "scrub_nat_dnc": "true",
+                                    "lead": {
+                                        "lead_phone": rvm_phone
+                                    }
                                 }
-                            }
 
-                            # post the data payload to the dialer central service
-                            r = requests.post(dialercentral_url, headers=hdr, data=payload)
+                                # post the data payload to the dialer central service
+                                r = requests.post(dialercentral_url, headers=hdr, data=payload)
 
-                            # hey look, we got a response from our URL
-                            if r.status_code == 201:
+                                # hey look, we got a response from our URL
+                                if r.status_code == 201:
 
-                                # let us format the response
-                                resp = r.json()['result']
-                                result = str(resp).encode('utf-8')
+                                    # let us format the response
+                                    resp = r.json()['result']
+                                    result = str(resp).encode('utf-8')
 
-                                # is the response object a dict?
-                                if isinstance(resp, dict):
+                                    # is the response object a dict?
+                                    if isinstance(resp, dict):
 
-                                    # set up the results to commit
-                                    lead.rvm_status = result
-                                    lead.rvm_date = datetime.datetime.now()
-                                    lead.rvm_message = rvm_phone
-                                    lead.rvm_sent = True
+                                        # set up the results to commit
+                                        lead.rvm_status = result
+                                        lead.rvm_date = datetime.datetime.now()
+                                        lead.rvm_message = rvm_phone
+                                        lead.rvm_sent = True
 
-                                    # commit to the database
-                                    db.session.commit()
+                                        # commit to the database
+                                        db.session.commit()
 
-                                    # increment the rvm_counter
-                                    campaign.rvm_send_count += 1
-                                    db.session.commit()
+                                        # increment the rvm_counter
+                                        campaign.rvm_send_count += 1
+                                        db.session.commit()
 
-                                    # log the result
-                                    logger.info('Lead ID: {} was sent RVM ID: {} to {} on {}'.format(
-                                        lead.id, rvm_campaign_id, rvm_phone, current_time
-                                    ))
+                                        # log the result
+                                        logger.info('Lead ID: {} was sent RVM ID: {} to {} on {}'.format(
+                                            lead.id, rvm_campaign_id, rvm_phone, current_time
+                                        ))
 
-                            # uh oh, we got a DNC response
-                            elif r.status_code == 403:
+                                # uh oh, we got a DNC response
+                                elif r.status_code == 403:
 
-                                resp = r.json()
-                                msg = str(resp['Error']).encode('utf-8')
+                                    resp = r.json()
+                                    msg = str(resp['Error']).encode('utf-8')
 
-                                if isinstance(resp, dict):
-                                    lead.rvm_status = 'ERROR'
-                                    lead.rvm_message = msg
-                                    lead.rvm_date = datetime.datetime.now()
+                                    if isinstance(resp, dict):
+                                        lead.rvm_status = 'ERROR'
+                                        lead.rvm_message = msg
+                                        lead.rvm_date = datetime.datetime.now()
 
-                                    # commit to the database
-                                    db.session.commit()
+                                        # commit to the database
+                                        db.session.commit()
 
-                                    # log the result
-                                    logger.warning('Lead ID: {} was found in the National DO NOT CALL registry.  '
-                                                   'I give up.'.format(lead_id))
+                                        # log the result
+                                        logger.warning('Lead ID: {} was found in the National DO NOT CALL registry.  '
+                                                       'I give up.'.format(lead_id))
 
-                            elif r.status_code == 404:
+                                elif r.status_code == 404:
 
-                                resp = r.json()
-                                result = str(resp['Error']).encode('utf-8')
+                                    resp = r.json()
+                                    result = str(resp['Error']).encode('utf-8')
 
-                                if isinstance(resp, dict):
+                                    if isinstance(resp, dict):
 
-                                    # set up the results to commit
-                                    lead.rvm_status = 'ERROR'
-                                    lead.rvm_message = result
-                                    lead.rvm_date = datetime.datetime.now()
+                                        # set up the results to commit
+                                        lead.rvm_status = 'ERROR'
+                                        lead.rvm_message = result
+                                        lead.rvm_date = datetime.datetime.now()
 
-                                    # commit to the database
-                                    db.session.commit()
+                                        # commit to the database
+                                        db.session.commit()
 
-                                    # log the result
-                                    logger.warning('The RVM Campaign ID was not found. Who is in charge here?  '
-                                                   'Should I retry?')
+                                        # log the result
+                                        logger.warning('The RVM Campaign ID was not found. Who is in charge here?  '
+                                                       'Should I retry?')
 
-                            # dialer central sent a http response
-                            # that I do not understand
-                            else:
-                                # log the result and retry
-                                logger.info('Dialer Central sent {} response to our request.  '
-                                            'Will retry...'.format(r.status_code))
-
+                                # dialer central sent a http response
+                                # that I do not understand
+                                else:
+                                    # log the result and retry
+                                    logger.info('Dialer Central sent {} response to our request.  '
+                                                'Will retry...'.format(r.status_code))
+                        else:
+                            # log the result
+                            logger.info('Campaign {} does not have a valid RVM Campaign ID.  '
+                                        'Task Aborted!'.format(campaign.id))
                     else:
                         # log the result
                         logger.info('Campaign not found.  Task Aborted!')
@@ -1444,3 +1451,139 @@ def resend_leads_to_dealer():
 
         # log the result
         logger.critical('The database returned error: {}'.format(str(err)))
+
+
+@celery.task(queue='send_rvms', max_retries=3)
+def resend_rvm_http_errors():
+    pass
+
+
+@celery.task(bind=True)
+def send_daily_recap_report():
+    """
+    Generate Daily Recap Report for each dealer by campaign
+    :return: csv file
+    """
+    # mailgun
+    mailgun_url = 'https://api.mailgun.net/v3/mail.earlbdc.com/messages'
+    mailgun_sandbox_url = 'https://api.mailgun.net/v3/sandbox3b609311624841c0bb2f9154e41e34de.mailgun.org/messages'
+    mailgun_apikey = 'key-dfd370f4412eaccce27394f7bceaee0e'
+
+    # set up our report params
+    current_time = datetime.datetime.now()
+    yesterday = current_time - datetime.timedelta(days=1)
+    start_date = datetime.datetime.strptime(yesterday + '00:00:00', '%Y-%m-%d %H:%M:%S')
+    end_date = datetime.datetime.strptime(yesterday + '23:59:59', '%Y-%m-%d %H:%M:%S')
+    rows = []
+
+    # get our list of active stores
+    stores = Store.query.filter(
+        Store.status == 'ACTIVE'
+    ).all()
+
+    # loop the store list
+    for store in stores:
+
+        # set up some vars we'll need
+        store_email = store.reporting_email
+
+        if store_email:
+
+            # get our store campaigns
+            campaigns = Campaign.query.filter(
+                Campaign.store_id == store.id,
+                Campaign.status == 'ACTIVE'
+            ).one()
+
+            if campaigns:
+
+                for campaign in campaigns:
+
+                    campaign_id = campaign.id
+
+                    # do some raw sql to get the report fields for our csv file
+                    stmt = text("select av.created_date, av.first_name, av.last_name, av.address1, av.address2, av.city, "
+                                "av.state, av.zip_code, av.zip_4, av.email, av.cell_phone, av.credit_range, av.car_year, "
+                                "av.car_make, av.car_model "
+                                "from visitors v, appendedvisitors av "
+                                "where v.id = av.visitor "
+                                "and v.campaign_id = {} "                            
+                                "and ( v.created_date between '{}' and '{}' ) "
+                                "order by av.last_name, av.first_name asc".format(campaign_id, start_date, end_date))
+
+                    # execute the query and set the results
+                    results = AppendedVisitor.query.filter('created_date', 'first_name', 'last_name', 'address1', 'address2',
+                                                           'city', 'state', 'zip_code', 'zip_4', 'email', 'cell_phone',
+                                                           'credit_range', 'car_year', 'car_make',
+                                                           'car_model').from_statement(stmt).all()
+
+                    if results:
+                        for result in results:
+                            row = []
+                            row.append(result.created_date)
+                            row.append(result.first_name)
+                            row.append(result.last_name)
+                            row.append(result.address1)
+                            row.append(result.city)
+                            row.append(result.state)
+                            row.append(result.zip_code)
+                            row.append(result.email)
+                            row.append(result.cell_phone)
+                            row.append(result.credit_range)
+                            row.append(result.car_year)
+                            row.append(result.car_make)
+                            row.append(result.car_model)
+                            rows.append(row)
+
+                # set the header row
+                si = StringIO()
+                row_heading = []
+                row_heading.append('Created Date')
+                row_heading.append('First Name')
+                row_heading.append('Last Name')
+                row_heading.append('Address')
+                row_heading.append('City')
+                row_heading.append('State')
+                row_heading.append('ZipCode')
+                row_heading.append('Email')
+                row_heading.append('Phone')
+                row_heading.append('Credit Range')
+                row_heading.append('Auto Year')
+                row_heading.append('Auto Make')
+                row_heading.append('Auto Model')
+
+                writer = csv.writer(si)
+                writer.writerow(row_heading)
+
+                for row in rows:
+                    writer.writerow(row)
+                csv_content = si.getvalue().strip('\r\n')
+
+                # name the file
+                filename = store.name + ' ' + campaign.name \
+                                      + ' Daily Recap Report ' + str(yesterday.strftime('%x')) + '.csv'
+
+                #set up mailgun payload
+                payload = {
+                    "from": "EARL Automation <mailgun@earlbdc.com>",
+                    "to": store_email,
+                    "subject": "EARL Daily Recap Report",
+                    "text": "Daily recap report for " + campaign.name + " is attached."
+                }
+
+                try:
+                    r = requests.post(mailgun_url,
+                                      auth=('api', mailgun_apikey),
+                                      files={
+                                          "attachment[0]": (filename, open(csv_content, 'rb'))
+                                      },
+                                      data=payload)
+
+                    if r.status_code == 200:
+                        # log the result
+                        logger.info('Campaign {} was sent the daily recap report'.format(campaign_id))
+                    else:
+                        logger.info('There was an error sending the daily recap report for {}'.format(campaign_id))
+                except requests.HTTPError as err:
+                    logger.warning('Mailgun returned HTTP Error Code: {}'.format(err))
+
