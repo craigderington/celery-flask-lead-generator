@@ -569,7 +569,6 @@ def verify_lead(new_lead_id):
     """
     # https://api.kickbox.io/v2/verify?email=' + lead.email + '&apikey=' + kickbox_api_key
     newleadid = new_lead_id
-    task_id = celery.current_task.request.id
     kickbox_api_key = 'test_b2a8972a20c5dafd8b08f6b1ebb323d6660db597fc8fde74e247af7e03776e19'
     kickbox_base_url = 'https://api.kickbox.io/v2/verify?email='
 
@@ -579,7 +578,7 @@ def verify_lead(new_lead_id):
     }
 
     if not isinstance(newleadid, int):
-        newleadid = int(new_lead_id)
+        newleadid = int(newleadid)
 
     try:
 
@@ -1460,7 +1459,7 @@ def resend_rvm_http_errors():
 
 
 @celery.task(queue='send_rvms', max_retries=3)
-def send_daily_recap_report():
+def send_daily_recap_report(campaign_id):
     """
     Generate Daily Recap Report for each dealer by campaign
     :return: csv file
@@ -1471,6 +1470,9 @@ def send_daily_recap_report():
     mailgun_apikey = 'key-dfd370f4412eaccce27394f7bceaee0e'
 
     # set up our report params
+    if not isinstance(campaign_id, int):
+        campaign_id = int(campaign_id)
+
     current_day = datetime.datetime.now()
     one_day_ago = current_day - timedelta(days=1)
     yesterday = one_day_ago.strftime('%Y-%m-%d')
@@ -1479,143 +1481,162 @@ def send_daily_recap_report():
     rows = []
 
     try:
-        # get our list of active stores
-        stores = Store.query.filter(
-            Store.status == 'ACTIVE'
-        ).all()
 
-        # loop the store list
-        for store in stores:
+        # get our store campaigns
+        campaign = Campaign.query.filter(
+            Campaign.id == campaign_id
+        ).one()
 
-            # set up some vars we'll need
-            store_email = store.reporting_email
+        if campaign:
 
-            if store_email:
+            # get me the store
+            store = Store.query.filter(
+                Store.id == campaign.store_id
+            ).one()
 
-                # get our store campaigns
-                campaigns = Campaign.query.filter(
-                    Campaign.store_id == store.id,
-                    Campaign.status == 'ACTIVE'
+            # set up some vars we need
+            campaign_id = campaign.id
+            campaign_name = campaign.name
+            campaign_type = campaign.campaign_type
+            job_number = campaign.job_number
+            store_name = store.name
+            report_date = yesterday
+            msg_subject = str(store_name) + " EARL " + str(campaign_type) + " Daily Recap Report for " + str(report_date)
+            msg_body_text = str(store_name) + ' ' + str(campaign_name) + ' ' + str(campaign_type)\
+                            + " Daily Visitors recap report for " + str(yesterday) + " is attached.\n\nThank You!"
+
+            # execute the query and set the results
+            results = Visitor.query.join(AppendedVisitor, Visitor.id == AppendedVisitor.visitor)\
+                .add_columns(AppendedVisitor.created_date, AppendedVisitor.first_name, AppendedVisitor.last_name,
+                             AppendedVisitor.address1, AppendedVisitor.city, AppendedVisitor.state,
+                             AppendedVisitor.zip_code, AppendedVisitor.email, AppendedVisitor.cell_phone,
+                             AppendedVisitor.credit_range, AppendedVisitor.car_year, AppendedVisitor.car_make,
+                             AppendedVisitor.car_model)\
+                .filter(
+                    Visitor.campaign_id == campaign_id,
+                    Visitor.created_date.between(start_date, end_date)
                 ).all()
 
-                if campaigns:
+            if results:
+                for result in results:
+                    row = []
+                    row.append(result.created_date)
+                    row.append(result.first_name)
+                    row.append(result.last_name)
+                    row.append(result.address1)
+                    row.append(result.city)
+                    row.append(result.state)
+                    row.append(result.zip_code)
+                    row.append(result.email)
+                    row.append(result.cell_phone)
+                    row.append(result.credit_range)
+                    row.append(result.car_year)
+                    row.append(result.car_make)
+                    row.append(result.car_model)
+                    rows.append(row)
 
-                    for campaign in campaigns:
+                # set the header row
+                si = StringIO()
+                row_heading = []
+                row_heading.append('Created Date')
+                row_heading.append('First Name')
+                row_heading.append('Last Name')
+                row_heading.append('Address')
+                row_heading.append('City')
+                row_heading.append('State')
+                row_heading.append('ZipCode')
+                row_heading.append('Email')
+                row_heading.append('Phone')
+                row_heading.append('Credit Range')
+                row_heading.append('Auto Year')
+                row_heading.append('Auto Make')
+                row_heading.append('Auto Model')
 
-                        campaign_id = campaign.id
-                        campaign_name = campaign.name
+                writer = csv.writer(si)
+                writer.writerow(row_heading)
 
-                        # do some raw sql to get the report fields for our csv file
-                        stmt = text("select av.created_date, av.first_name, av.last_name, av.address1, av.address2, av.city, "
-                                    "av.state, av.zip_code, av.zip_4, av.email, av.cell_phone, av.credit_range, av.car_year, "
-                                    "av.car_make, av.car_model "
-                                    "from visitors v, appendedvisitors av "
-                                    "where v.id = av.visitor "
-                                    "and v.campaign_id = {} "                            
-                                    "and ( v.created_date between '{}' and '{}' ) "
-                                    "order by av.last_name, av.first_name asc".format(campaign_id, start_date, end_date))
+                for row in rows:
+                    writer.writerow(row)
 
-                        # execute the query and set the results
-                        results = Visitor.query.join(AppendedVisitor, Visitor.id == AppendedVisitor.visitor)\
-                            .add_columns(AppendedVisitor.created_date, AppendedVisitor.first_name, AppendedVisitor.last_name,
-                                         AppendedVisitor.address1, AppendedVisitor.city, AppendedVisitor.state,
-                                         AppendedVisitor.zip_code, AppendedVisitor.email, AppendedVisitor.cell_phone,
-                                         AppendedVisitor.credit_range, AppendedVisitor.car_year, AppendedVisitor.car_make,
-                                         AppendedVisitor.car_model)\
-                            .filter(
-                                Visitor.campaign_id == campaign_id,
-                                Visitor.created_date.between(start_date, end_date)
-                            ).all()
+                csv_content = si.getvalue().strip('\r\n')
 
-                        if results:
-                            for result in results:
-                                row = []
-                                row.append(result.created_date)
-                                row.append(result.first_name)
-                                row.append(result.last_name)
-                                row.append(result.address1)
-                                row.append(result.city)
-                                row.append(result.state)
-                                row.append(result.zip_code)
-                                row.append(result.email)
-                                row.append(result.cell_phone)
-                                row.append(result.credit_range)
-                                row.append(result.car_year)
-                                row.append(result.car_make)
-                                row.append(result.car_model)
-                                rows.append(row)
+                # name the file
+                report_file_name = 'Daily-Recap-Report.csv'
+                report_data = csv_content
 
-                            # set the header row
-                            si = StringIO()
-                            row_heading = []
-                            row_heading.append('Created Date')
-                            row_heading.append('First Name')
-                            row_heading.append('Last Name')
-                            row_heading.append('Address')
-                            row_heading.append('City')
-                            row_heading.append('State')
-                            row_heading.append('ZipCode')
-                            row_heading.append('Email')
-                            row_heading.append('Phone')
-                            row_heading.append('Credit Range')
-                            row_heading.append('Auto Year')
-                            row_heading.append('Auto Make')
-                            row_heading.append('Auto Model')
+                # set up mailgun payload
+                payload = {
+                    "from": "EARL Automation <mailgun@earlbdc.com>",
+                    "to": "craigderington@python-development-systems.com",
+                    "subject": msg_subject,
+                    "text": msg_body_text
+                }
 
-                            writer = csv.writer(si)
-                            writer.writerow(row_heading)
+                try:
+                    r = requests.post(mailgun_sandbox_url,
+                                      auth=('api', mailgun_apikey),
+                                      files={
+                                          "attachment": (report_file_name, report_data)
+                                      },
+                                      data=payload)
 
-                            for row in rows:
-                                writer.writerow(row)
+                    if r.status_code == 200:
+                        # log the result
+                        logger.info('Campaign {}-{}-{} was just sent the daily '
+                                    'recap report'.format(campaign_id, campaign_type, campaign_name))
+                    else:
+                        logger.info('There was an error sending the '
+                                    'daily recap report for {}: {}'.format(campaign_id, campaign_name))
 
-                            csv_content = si.getvalue().strip('\r\n')
-
-                            # name the file
-                            report_file_name = 'Daily-Recap-Report.csv'
-                            report_data = csv_content
-
-                            # set up mailgun payload
-                            payload = {
-                                "from": "EARL Automation <mailgun@earlbdc.com>",
-                                "to": store_email,
-                                "subject": "EARL Daily Recap Report",
-                                "text": campaign_name + " Daily recap report is attached."
-                            }
-
-                            try:
-                                r = requests.post(mailgun_url,
-                                                  auth=('api', mailgun_apikey),
-                                                  files={
-                                                      "attachment": (report_file_name, report_data)
-                                                  },
-                                                  data=payload)
-
-                                if r.status_code == 200:
-                                    # log the result
-                                    logger.info('Campaign {}-{} was just sent the daily '
-                                                'recap report'.format(campaign_id, campaign_name))
-                                else:
-                                    logger.info('There was an error sending the '
-                                                'daily recap report for {}: {}'.format(campaign_id, campaign_name))
-                            except requests.HTTPError as http_err:
-                                # log the result
-                                logger.warning('Mailgun returned HTTP Error Code: {}'.format(http_err))
-
-                        else:
-                            #log the result
-                            logger.warning('Campaign {} has no visitors to report.  '
-                                           'Task Aborted!'.format(campaign_name))
-
-                else:
+                except requests.HTTPError as http_err:
                     # log the result
-                    logger.warning('Store {} {} has no active campaigns '
-                                   'to send the daily recap report.  Task aborted!'.format(store.id, store.name))
+                    logger.warning('Mailgun returned HTTP Error Code: {}'.format(http_err))
+
             else:
                 # log the result
-                logger.warning('Store {} {} does not have a reporting email configured. '
-                               'Task Aborted!'.format(store.id, store.name))
+                logger.warning('Campaign {} has no visitors to report.  '
+                               'Task Aborted!'.format(campaign_name))
+        else:
+            # log the result
+            logger.info('Campaign {} not found.  Task aborted!')
 
     except exc.SQLAlchemyError as err:
 
         # log the result
         logger.critical('The database returned a serious error: {}'.format(str(err)))
+
+
+@celery.task(queue='send_rvms', max_retries=3)
+def get_recap_report_campaigns():
+    """
+    Generate the list of active campaigns and send them to the Recap Report task queue
+    :return: active campaign list
+    """
+    # do some date stuff
+    current_time = datetime.datetime.now()
+    one_day_ago = current_time - timedelta(days=1)
+    yesterday = one_day_ago.strftime('%Y-%m-%d')
+    report_date = datetime.datetime.strptime(yesterday + ' 23:59:59', '%Y-%m-%d %H:%M:%S')
+
+    # get a list of active campaigns
+    active_campaigns = Campaign.query.filter(
+        Campaign.status == 'ACTIVE'
+    ).all()
+
+    # awesome.  we haz campaigns.  please continue...
+    if active_campaigns:
+
+        # set the count variable
+        campaign_count = len(active_campaigns)
+
+        # loop over our list
+        for campaign in active_campaigns:
+            send_daily_recap_report(campaign.id)
+
+        # log the result
+        logger.info('EARL Automation airdropped {} active campaigns '
+                    'into the Send Daily Recap Task Queue'.format(campaign_count))
+
+    else:
+        # log the result
+        logger.info('No active campaigns to air drop to task queue...  Task Aborted!')

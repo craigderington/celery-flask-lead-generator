@@ -1,7 +1,7 @@
 from celery import Celery
 from celery.schedules import crontab
 from earlauto import create_app
-from earlauto.tasks import log, get_new_visitors, resend_http_errors, resend_leads_to_dealer, send_daily_recap_report
+from earlauto.tasks import log, get_new_visitors, resend_http_errors, resend_leads_to_dealer, get_recap_report_campaigns
 
 
 def create_celery(app):
@@ -35,9 +35,9 @@ def setup_periodic_tasks(sender, **kwargs):
     sender.add_periodic_task(43200.0, resend_http_errors, name='EARL Resend HTTP Errors')
     sender.add_periodic_task(43200.0, resend_leads_to_dealer, name='EARL Resend Leads to Dealer')
 
-    # periodic task executes every night just after mid-midnight
+    # periodic task executes on crontab schedule
     sender.add_periodic_task(
         crontab(hour=0, minute=2),
-        send_daily_recap_report,
-        name='Send the Daily Recap Report'
+        get_recap_report_campaigns,
+        name='Get Active Campaigns and Send the Daily Recap Reports'
     )
