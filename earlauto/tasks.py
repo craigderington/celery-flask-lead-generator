@@ -1628,8 +1628,7 @@ def get_recap_report_campaigns():
 
     # get a list of active campaigns
     active_campaigns = Campaign.query.filter(
-        Campaign.status == 'ACTIVE',
-        Campaign.end_date <= report_date
+        Campaign.status == 'ACTIVE'
     ).all()
 
     # awesome.  we haz campaigns.  please continue...
