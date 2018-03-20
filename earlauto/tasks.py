@@ -1567,7 +1567,7 @@ def send_daily_recap_report(campaign_id):
                 # set up mailgun payload
                 payload = {
                     "from": "EARL Automation Server v.01 <mailgun@earlbdc.com>",
-                    "to": ["craigderington@python-development-systems.com", "melissa@contactdms.com",
+                    "to": ["craigderington@python-development-systems.com", "Earl-Email-validation@contactdms.com",
                            "jayme@contactdms.com"],
                     "subject": msg_subject,
                     "text": msg_body_text
