@@ -1500,6 +1500,11 @@ def send_daily_recap_report(campaign_id):
             campaign_type = campaign.campaign_type
             job_number = campaign.job_number
             store_name = store.name
+            store_reporting_email = store.reporting_email
+
+            if not store_reporting_email or store_reporting_email == "None":
+                store_reporting_email = "earl-email-validation@contactdms.com"
+
             report_date = yesterday
             msg_subject = str(store_name) + " EARL " + str(campaign_type) + " Daily Recap Report for " + str(report_date)
             msg_body_text = str(store_name) + ' ' + str(campaign_name) + ' ' + str(campaign_type)\
@@ -1568,15 +1573,14 @@ def send_daily_recap_report(campaign_id):
                 # set up mailgun payload
                 payload = {
                     "from": "EARL Automation Server v.01 <mailgun@earlbdc.com>",
-                    "to": ["craigderington@python-development-systems.com", "Earl-Email-validation@contactdms.com",
-                           "jayme@contactdms.com"],
+                    "to": [store_reporting_email],
                     "subject": msg_subject,
                     "text": msg_body_text
                 }
 
                 # let's call mailgun and chat
                 try:
-                    r = requests.post(mailgun_sandbox_url,
+                    r = requests.post(mailgun_url,
                                       auth=('api', mailgun_apikey),
                                       files={
                                           "attachment": (report_file_name, report_data)
