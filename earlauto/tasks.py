@@ -1566,12 +1566,14 @@ def send_daily_recap_report(campaign_id):
 
                 # set up mailgun payload
                 payload = {
-                    "from": "EARL Automation <mailgun@earlbdc.com>",
-                    "to": "craigderington@python-development-systems.com",
+                    "from": "EARL Automation Server v.01 <mailgun@earlbdc.com>",
+                    "to": ["craigderington@python-development-systems.com", "melissa@contactdms.com",
+                           "jayme@contactdms.com"],
                     "subject": msg_subject,
                     "text": msg_body_text
                 }
 
+                # let's call mailgun and chat
                 try:
                     r = requests.post(mailgun_sandbox_url,
                                       auth=('api', mailgun_apikey),
@@ -1580,14 +1582,18 @@ def send_daily_recap_report(campaign_id):
                                       },
                                       data=payload)
 
+                    # mg response is OK!
                     if r.status_code == 200:
                         # log the result
                         logger.info('Campaign {}-{}-{} was just sent the daily '
                                     'recap report'.format(campaign_id, campaign_type, campaign_name))
+
+                    # oh, no, we got an error sending the report
                     else:
                         logger.info('There was an error sending the '
                                     'daily recap report for {}: {}'.format(campaign_id, campaign_name))
 
+                # we got an http error, that's bad news.
                 except requests.HTTPError as http_err:
                     # log the result
                     logger.warning('Mailgun returned HTTP Error Code: {}'.format(http_err))
@@ -1600,6 +1606,7 @@ def send_daily_recap_report(campaign_id):
             # log the result
             logger.info('Campaign {} not found.  Task aborted!')
 
+    # we need to talk cause we got bigger problems now
     except exc.SQLAlchemyError as err:
 
         # log the result
@@ -1620,7 +1627,8 @@ def get_recap_report_campaigns():
 
     # get a list of active campaigns
     active_campaigns = Campaign.query.filter(
-        Campaign.status == 'ACTIVE'
+        Campaign.status == 'ACTIVE',
+        Campaign.end_date <= report_date
     ).all()
 
     # awesome.  we haz campaigns.  please continue...
