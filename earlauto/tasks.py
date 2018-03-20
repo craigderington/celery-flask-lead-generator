@@ -1503,7 +1503,8 @@ def send_daily_recap_report(campaign_id):
             report_date = yesterday
             msg_subject = str(store_name) + " EARL " + str(campaign_type) + " Daily Recap Report for " + str(report_date)
             msg_body_text = str(store_name) + ' ' + str(campaign_name) + ' ' + str(campaign_type)\
-                            + " Daily Visitors recap report for " + str(yesterday) + " is attached.\n\nThank You!"
+                            + " Daily Visitors recap report for " + str(yesterday) + " is attached.\n\nThank You!\n\n" \
+                                                                                     "Your Diamond Media Solutions Team"
 
             # execute the query and set the results
             results = Visitor.query.join(AppendedVisitor, Visitor.id == AppendedVisitor.visitor)\
