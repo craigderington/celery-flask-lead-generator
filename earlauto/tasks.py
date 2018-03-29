@@ -1204,7 +1204,7 @@ def send_rvm(lead_id):
                 # assign the appended visitor a cell phone variable
                 rvm_phone = av.cell_phone
 
-                # cool, does this lead object have
+                # cool, does this lead object has
                 # a cell phone number in this system?
                 if rvm_phone:
 
@@ -1232,9 +1232,9 @@ def send_rvm(lead_id):
                                 }
 
                                 # post the data payload to the dialer central service
-                                r = requests.post(dialercentral_url, headers=hdr, data=payload)
+                                r = requests.post(dialercentral_url, headers=hdr, data=json.dumps(payload))
 
-                                # hey look, we got a response from our URL
+                                # hey look, we got a response from Dialer Central
                                 if r.status_code == 201:
 
                                     # let us format the response
@@ -1303,8 +1303,8 @@ def send_rvm(lead_id):
                                 # that I do not understand
                                 else:
                                     # log the result and retry
-                                    logger.info('Dialer Central sent {} response to our request.  '
-                                                'Will retry...'.format(r.status_code))
+                                    logger.info('Dialer Central sent {} response to our request for Lead ID: {}.  '
+                                                'Will retry...'.format(r.status_code, lead_id))
                         else:
                             # log the result
                             logger.info('Campaign {} does not have a valid RVM Campaign ID.  '
