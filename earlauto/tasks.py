@@ -1238,8 +1238,9 @@ def send_rvm(lead_id):
                                 if r.status_code == 201:
 
                                     # let us format the response
-                                    resp = r.json()['result']
-                                    result = str(resp).encode('utf-8')
+                                    resp = r.json()
+                                    str_resp = resp['result']
+                                    result = str(str_resp).encode('utf-8')
 
                                     # is the response object a dict?
                                     if isinstance(resp, dict):
