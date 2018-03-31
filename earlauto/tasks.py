@@ -1330,7 +1330,7 @@ def send_rvm(lead_id):
 
     # ouch, database error
     except exc.SQLAlchemyError as err:
-        logger.critical('The database threw an error'.format(str(err)))
+        logger.critical('The database threw error: {}'.format(str(err)))
 
 
 @celery.task(queue='append_visitors', max_retries=3)
