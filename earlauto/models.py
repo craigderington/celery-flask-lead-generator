@@ -6,6 +6,30 @@ from sqlalchemy.orm import relationship
 
 # Define application db.Models
 
+class User(db.Model):
+    __tablename__ = 'ab_user'
+    id = Column(Integer, primary_key=True)
+    first_name = Column(String(64), nullable=False)
+    last_name = Column(String(64), nullable=False)
+    username = Column(String(64), unique=True, nullable=False, index=True)
+    password = Column(String(256), nullable=False)
+    active = Column(Boolean, default=1)
+    email = Column(String(120), unique=True, nullable=False)
+    last_login = Column(DateTime)
+    login_count = Column(Integer)
+    fail_login_count = Column(Integer)
+    created_on = Column(DateTime, default=datetime.now, nullable=True)
+    changed_on = Column(DateTime, default=datetime.now, nullable=True)
+    created_by_fk = Column(Integer)
+    changed_by_fk = Column(Integer)
+
+    def __repr__(self):
+        if self.last_name and self.first_name:
+            return '{} {}'.format(
+                self.first_name,
+                self.last_name
+            )
+
 
 class Visitor(db.Model):
     __tablename__ = 'visitors'

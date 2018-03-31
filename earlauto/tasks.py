@@ -235,8 +235,8 @@ def get_new_visitors():
             return 'No Records Found!'
 
     except pymongo.errors.ConnectionFailure as e:
-        logger.critical('Error connecting to MongoDB.  Send alerts.')
-        print('Could not connect to the Pixel Tracker MongoDB server: {}'.format(e))
+        logger.warning('PyMongo returned database error: {}'.format(str(e)))
+        print('Back in 3..2..1..')
 
 
 @celery.task(queue='append_visitors', max_retries=3)
@@ -481,7 +481,7 @@ def append_visitor(new_visitor_id):
             print('There were no records to process so I\'m going back to sleep...')
 
     except exc.SQLAlchemyError as e:
-        print('The database returned error: {}'.format(str(e)))
+        logger.warning('Database returned error: {}'.format(str(e)))
 
 
 @celery.task(queue='create_leads', max_retries=3)
@@ -558,7 +558,7 @@ def create_lead(appended_visitor_id):
         return visitor_id
 
     except exc.SQLAlchemyError as err:
-        print('A database error occurred: {}'.format(err))
+        logger.warning('Database returned error: {}'.format(str(err)))
 
 
 @celery.task(queue='verify_leads', max_retries=3)
@@ -686,9 +686,8 @@ def verify_lead(new_lead_id):
             # log the result
             logger.info('Lead not found.  Task aborted.')
 
-    except exc.SQLAlchemyError as db_err:
-        print('Database returned error: {}'.format(db_err))
-        logger.critical('Database error, aborting process...')
+    except exc.SQLAlchemyError as err:
+        logger.warning('Database returned error: {}'.format(str(err)))
 
 
 @celery.task(queue='send_leads', max_retries=3)
@@ -838,8 +837,7 @@ def send_lead_to_dealer(lead_id):
         return lead_id
 
     except exc.SQLAlchemyError as err:
-        print('Database error {}'.format(err))
-        logger.info('Database error has occurred.   Task will automatically be re-tried 3 times.')
+        logger.info('Database returned error: {}'.format(str(err)))
 
 
 @celery.task(queue='send_adfs', max_retries=3)
@@ -993,7 +991,7 @@ def send_auto_adf_lead(lead_id):
             logger.info('Lead ID: {} was not found.  Task aborted!'.format(lead_id))
 
     except exc.SQLAlchemyError as err:
-        logger.critical('Database error {} occurred.  Task aborted!'.format(err))
+        logger.warning('Database returned error: {}'.format(str(err)))
 
 
 @celery.task(queue='send_followups', max_retries=3)
@@ -1151,7 +1149,7 @@ def send_followup_email(lead_id):
     # ouch, hard database error.  he is...down... for... the ... count.
     # it's all over ladies and gentlemen.
     except exc.SQLAlchemyError as err:
-        logger.critical('Database threw a big fat error.  I\'m out!')
+        logger.warning('Database returned error: {}'.format(str(err)))
 
 
 @celery.task(queue='send_rvms', max_retries=3)
@@ -1330,7 +1328,7 @@ def send_rvm(lead_id):
 
     # ouch, database error
     except exc.SQLAlchemyError as err:
-        logger.critical('The database threw error: {}'.format(str(err)))
+        logger.warning('Database returned error: {}'.format(str(err)))
 
 
 @celery.task(queue='append_visitors', max_retries=3)
@@ -1391,7 +1389,7 @@ def resend_http_errors():
     except exc.SQLAlchemyError as err:
 
         # log the result
-        logger.critical('The database returned error: {}'.format(str(err)))
+        logger.warning('Database returned error: {}'.format(str(err)))
 
 
 @celery.task(queue='send_leads', max_retries=3)
@@ -1452,7 +1450,7 @@ def resend_leads_to_dealer():
     except exc.SQLAlchemyError as err:
 
         # log the result
-        logger.critical('The database returned error: {}'.format(str(err)))
+        logger.warning('Database returned error: {}'.format(str(err)))
 
 
 @celery.task(queue='send_rvms', max_retries=3)
@@ -1617,7 +1615,7 @@ def send_daily_recap_report(campaign_id):
     except exc.SQLAlchemyError as err:
 
         # log the result
-        logger.critical('The database returned a serious error: {}'.format(str(err)))
+        logger.warning('Database returned error: {}'.format(str(err)))
 
 
 @celery.task(queue='send_rvms', max_retries=3)
