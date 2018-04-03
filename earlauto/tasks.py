@@ -1280,6 +1280,7 @@ def send_rvm(lead_id):
                                         logger.warning('Lead ID: {} was found in the National DO NOT CALL registry.  '
                                                        'I give up.'.format(lead_id))
 
+                                # something is missing or invalid rvm_campaign_id
                                 elif r.status_code == 404:
 
                                     resp = r.json()
@@ -1456,6 +1457,45 @@ def resend_leads_to_dealer():
 @celery.task(queue='send_rvms', max_retries=3)
 def resend_rvm_http_errors():
     pass
+
+
+@celery.task(queue='send_rvms', max_retries=3)
+def deactivate_campaign(campaign_id):
+    """
+    Mark Active Campaign INACTIVE upon campaign end/expiration date
+    :param campaign_id:
+    :return: none
+    """
+    # check our campaign ID
+    if not isinstance(campaign_id, int):
+        campaign_id = int(campaign_id)
+
+    try:
+        campaign = Campaign.query.filter(
+            Campaign.id == campaign_id
+        ).one()
+
+        # campaign found
+        if campaign:
+            campaign.status = 'INACTIVE'
+            db.session.commit()
+
+            # log the result
+            logger.info('Campaign {} was set to Inactive with an expiration date of {}.'.format(
+                campaign.id, campaign.end_date
+            ))
+
+        # campaign id not found
+        else:
+
+            # log the result
+            logger.info('Campaign {} was not found or has already been deactivated...'.format(campaign_id))
+
+    # database exception
+    except exc.SQLAlchemyError as err:
+
+        # log the result
+        logger.warning('Database returned error: {}'.format(str(err)))
 
 
 @celery.task(queue='send_rvms', max_retries=3)
@@ -1652,3 +1692,42 @@ def get_recap_report_campaigns():
     else:
         # log the result
         logger.info('No active campaigns to air drop to task queue...  Task Aborted!')
+
+
+@celery.task(queue='send_rvms', max_retries=3)
+def get_expired_campaigns():
+    """
+    Generate a list of active campaigns by ID and send into the Mark Campaign Inactive
+    :return: list of active campaign ID's
+    """
+
+    try:
+        # do some date stuff
+        current_time = datetime.datetime.now()
+        str_date = current_time.strftime('%Y-%m-%d')
+        report_date = datetime.datetime.strptime(str_date, '%Y-%m-%d')
+
+        # get a list of active campaigns
+        active_campaigns = Campaign.query.filter(
+            Campaign.status == 'ACTIVE',
+            Campaign.end_date < report_date
+        ).all()
+
+        # we have active campaigns to update
+        if active_campaigns:
+            campaign_count = len(active_campaigns)
+
+            for campaign in active_campaigns:
+                deactivate_campaign.delay(campaign.id)
+
+            # log the result
+            logger.info('EARL Automation airdropped {} active campaigns to '
+                        'get deactivated.'.format(str(campaign_count)))
+
+        # no active campaigns
+        else:
+            # log the result
+            logger.info('No activate campaigns needs to be deactivated...  Task aborted!')
+
+    except exc.SQLAlchemyError as err:
+        logger.warning('Database returned error: {}'.format(str(err)))
