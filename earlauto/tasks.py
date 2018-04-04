@@ -9,9 +9,10 @@ import requests
 from celery.signals import task_postrun
 from celery.utils.log import get_task_logger
 from earlauto import celery, db
-from earlauto.models import Visitor, Campaign, CampaignType, AppendedVisitor, Store, Lead
+from earlauto.models import Visitor, Campaign, CampaignType, AppendedVisitor, Store, Lead, StoreDashboard, \
+    GlobalDashboard, CampaignDashboard
 from sqlalchemy import and_, between
-from sqlalchemy import exc
+from sqlalchemy import exc, func
 from sqlalchemy import text
 from io import StringIO
 from datetime import timedelta
@@ -1729,5 +1730,151 @@ def get_expired_campaigns():
             # log the result
             logger.info('No activate campaigns needs to be deactivated...  Task aborted!')
 
+    # log the result
     except exc.SQLAlchemyError as err:
         logger.warning('Database returned error: {}'.format(str(err)))
+
+
+@celery.task(queue='send_rvms', max_retries=3)
+def update_store_dashboard(store_id):
+    """
+    Update the store dashboard
+    :param store_id:
+    :return: None
+    """
+    current_day = datetime.datetime.now()
+    gl_append_rate = 0.00
+    uq_append_rate = 0.00
+    us_append_rate = 0.00
+    total_appends = 0
+    total_rvms = 0
+    total_rtns = 0
+    global_visitors = 0
+    total_campaigns = 0
+    active_campaigns = 0
+    unique_visitors = 0
+
+    # check the instance of store_id
+    if not isinstance(store_id, int):
+        store_id = int(store_id)
+
+    # ok, get the store
+    try:
+        store = Store.query.filter(
+            Store.id == store_id
+        ).one()
+
+        # do we have a store
+        if store:
+
+            total_campaigns = Campaign.query.filter(Campaign.store_id == store.id).count()
+
+            active_campaigns = Campaign.query.filter(
+                Campaign.store_id == store.id,
+                Campaign.status == 'ACTIVE'
+            ).count()
+
+            stmt0 = text("select sum(num_visits) as global_visitors "
+                         "from visitors v "
+                         "where v.store_id={}".format(store.id))
+
+            global_visitors = db.session.query('global_visitors').from_statement(stmt0).all()
+            unique_visitors = Visitor.query.filter(Visitor.store_id == store.id).count()
+            us_visitors = Visitor.query.filter(Visitor.store_id == store.id, Visitor.country_code == 'US').count()
+
+            total_appends = Visitor.query.join(
+                AppendedVisitor, Visitor.id == AppendedVisitor.visitor
+            ).filter(Visitor.store_id == store.id).count()
+
+            stmt1 = text("SELECT count(l.id) as total_rtns "
+                         "from visitors v, appendedvisitors av, leads l where v.id = av.visitor "
+                         "and l.appended_visitor_id = av.id "
+                         "and v.store_id={} "
+                         "and l.sent_to_dealer=1".format(store.id))
+            stmt2 = text("SELECT count(l.id) as total_followup_emails "
+                         "from visitors v, appendedvisitors av, leads l where v.id = av.visitor "
+                         "and l.appended_visitor_id = av.id "
+                         "and v.store_id={} "
+                         "and l.followup_email=1".format(store.id))
+            stmt3 = text("SELECT count(l.id) as total_rvms "
+                         "from visitors v, appendedvisitors av, leads l where v.id = av.visitor "
+                         "and l.appended_visitor_id = av.id "
+                         "and v.store_id={} "
+                         "and l.rvm_sent=1".format(store.id))
+
+            # set the values
+            total_rtns = db.session.query('total_rtns').from_statement(stmt1).all()
+            total_followup_emails = db.session.query('total_followup_emails').from_statement(stmt2).all()
+            total_rvms = db.session.query('total_rvms').from_statement(stmt3).all()
+
+            # calc the rates
+            if total_appends > 0:
+                global_visitors = int(global_visitors[0][0])
+                gl_append_rate = float(int(total_appends) / int(global_visitors) * 100.0)
+                uq_append_rate = float(int(total_appends) / int(unique_visitors) * 100.0)
+                us_append_rate = float(int(total_appends) / int(us_visitors) * 100.0)
+
+                try:
+
+                    new_dashboard = StoreDashboard(
+                        store_id=store.id,
+                        total_campaigns=total_campaigns,
+                        active_campaigns=active_campaigns,
+                        total_global_visitors=global_visitors,
+                        total_unique_visitors=unique_visitors,
+                        total_us_visitors=us_visitors,
+                        total_appends=total_appends,
+                        total_sent_to_dealer=total_rtns[0][0],
+                        total_sent_followup_emails=total_followup_emails[0][0],
+                        total_rvms_sent=total_rvms[0][0],
+                        global_append_rate=gl_append_rate,
+                        unique_append_rate=uq_append_rate,
+                        us_append_rate=us_append_rate
+                    )
+
+                    db.session.add(new_dashboard)
+                    db.session.commit()
+
+                    # log the result
+                    logger.info('Store: {} Dealer Dashboard was updated at {}.'.format(store.name, current_day))
+
+                # log the exception
+                except exc.SQLAlchemyError as err:
+                    logger.info('Database returned error: {}'.format(str(err)))
+
+        else:
+            # log the result
+            logger.info('Store Not Found.  Task Aborted!')
+
+    except exc.SQLAlchemyError as err:
+        logger.info('Database returned error: {}'.format(str(err)))
+
+
+@celery.task(queue='send_rvms', max_retries=3)
+def get_stores_for_dashboard():
+    """
+    Generate a list of store ID's and update the dashboard
+    :return: none
+    """
+    store_count = 0
+
+    try:
+        stores = Store.query.filter(
+            Store.status == 'ACTIVE'
+        ).all()
+
+        if stores:
+            for store in stores:
+                update_store_dashboard.delay(store.id)
+                store_count += 1
+
+            logger.info('EARL Automation airdropped {} stores to the task queue to update the store dashboard.'.format(
+                store_count
+            ))
+
+        else:
+            # log the result
+            logger.info('Notice: No active stores for dashboard update...')
+
+    except exc.SQLAlchemyError as err:
+        logger.info('Database returned error: {}'.format(str(err)))
