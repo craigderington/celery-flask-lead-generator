@@ -1460,7 +1460,7 @@ def resend_rvm_http_errors():
     pass
 
 
-@celery.task(queue='send_rvms', max_retries=3)
+@celery.task(queue='reports', max_retries=3)
 def deactivate_campaign(campaign_id):
     """
     Mark Active Campaign INACTIVE upon campaign end/expiration date
@@ -1499,7 +1499,7 @@ def deactivate_campaign(campaign_id):
         logger.warning('Database returned error: {}'.format(str(err)))
 
 
-@celery.task(queue='send_rvms', max_retries=3)
+@celery.task(queue='reports', max_retries=3)
 def send_daily_recap_report(campaign_id):
     """
     Generate Daily Recap Report for each dealer by campaign
@@ -1659,7 +1659,7 @@ def send_daily_recap_report(campaign_id):
         logger.warning('Database returned error: {}'.format(str(err)))
 
 
-@celery.task(queue='send_rvms', max_retries=3)
+@celery.task(queue='reports', max_retries=3)
 def get_recap_report_campaigns():
     """
     Generate the list of active campaigns and send them to the Recap Report task queue
@@ -1695,7 +1695,7 @@ def get_recap_report_campaigns():
         logger.info('No active campaigns to air drop to task queue...  Task Aborted!')
 
 
-@celery.task(queue='send_rvms', max_retries=3)
+@celery.task(queue='reports', max_retries=3)
 def get_expired_campaigns():
     """
     Generate a list of active campaigns by ID and send into the Mark Campaign Inactive
@@ -1735,7 +1735,7 @@ def get_expired_campaigns():
         logger.warning('Database returned error: {}'.format(str(err)))
 
 
-@celery.task(queue='send_rvms', max_retries=3)
+@celery.task(queue='reports', max_retries=3)
 def update_store_dashboard(store_id):
     """
     Update the store dashboard
@@ -1829,7 +1829,8 @@ def update_store_dashboard(store_id):
                         total_rvms_sent=total_rvms[0][0],
                         global_append_rate=gl_append_rate,
                         unique_append_rate=uq_append_rate,
-                        us_append_rate=us_append_rate
+                        us_append_rate=us_append_rate,
+                        last_update=current_day
                     )
 
                     db.session.add(new_dashboard)
@@ -1850,7 +1851,7 @@ def update_store_dashboard(store_id):
         logger.info('Database returned error: {}'.format(str(err)))
 
 
-@celery.task(queue='send_rvms', max_retries=3)
+@celery.task(queue='reports', max_retries=3)
 def get_stores_for_dashboard():
     """
     Generate a list of store ID's and update the dashboard
@@ -1875,6 +1876,171 @@ def get_stores_for_dashboard():
         else:
             # log the result
             logger.info('Notice: No active stores for dashboard update...')
+
+    except exc.SQLAlchemyError as err:
+        logger.info('Database returned error: {}'.format(str(err)))
+
+
+@celery.task(queue='reports', max_retries=3)
+def update_global_dashboard():
+    """
+    Update the global dashboard on a scheduled interval.
+    Every 2 hours to start
+    Create a new record each time to maintain historical dashboard
+    :return: none
+    """
+    current_time = datetime.datetime.now()
+
+    formatted_datetime = current_time.strftime('%Y-%m-%d %H:%M:%S')
+
+    # run the dashboard queries
+
+    try:
+        total_stores = Store.query.count()
+        active_stores = Store.query.filter(Store.status == 'ACTIVE').count()
+        total_campaigns = Campaign.query.count()
+        active_campaigns = Campaign.query.filter(Campaign.status == 'ACTIVE').count()
+
+        stmt0 = text("select sum(v.num_visits) as global_visitors "
+                     "from visitors v ")
+
+        global_visitors = db.session.query('global_visitors').from_statement(stmt0).all()
+        unique_visitors = Visitor.query.count()
+        us_visitors = Visitor.query.filter(Visitor.country_code == 'US').count()
+        total_appends = AppendedVisitor.query.count()
+        total_rtns = Lead.query.filter(Lead.sent_to_dealer == 1).count()
+        total_followup_emails = Lead.query.filter(Lead.followup_email == 1).count()
+        total_rvms = Lead.query.filter(Lead.rvm_sent == 1, Lead.rvm_message == 'LOADED').count()
+
+        # calc the percentages
+        total_global_visitors = int(global_visitors[0][0])
+        total_unique_visitors = int(unique_visitors)
+        total_us_visitors = int(us_visitors)
+        total_appends = int(total_appends)
+        total_sent_to_dealer = int(total_rtns)
+        total_sent_followup_emails = int(total_followup_emails)
+        total_rvms_sent = int(total_rvms)
+        global_append_rate = float((total_appends / total_global_visitors) * 100.0)
+        unique_append_rate = float((total_appends / total_unique_visitors) * 100.0)
+        us_append_rate = float((total_appends / total_us_visitors) * 100.0)
+
+        # add a new dashboard record
+        dashboard = GlobalDashboard(
+            total_stores=total_stores,
+            active_stores=active_stores,
+            total_campaigns=total_campaigns,
+            active_campaigns=active_campaigns,
+            total_global_visitors=total_global_visitors,
+            total_unique_visitors=total_unique_visitors,
+            total_us_visitors=total_us_visitors,
+            total_appends=total_appends,
+            total_sent_to_dealer=total_sent_to_dealer,
+            total_sent_followup_emails=total_sent_followup_emails,
+            total_rvms_sent=total_rvms_sent,
+            global_append_rate=global_append_rate,
+            unique_append_rate=unique_append_rate,
+            us_append_rate=us_append_rate,
+            last_update=current_time
+        )
+
+        # commit to the database
+        db.session.add(dashboard)
+        db.session.commit()
+
+        # log the result
+        logger.info('Global dashboard was updated on: {}'.format(str(formatted_datetime)))
+
+    # database exception
+    except exc.SQLAlchemyError as err:
+        # log the result
+        logger.info('Database returned error: {}'.format(str(err)))
+
+
+@celery.task(queue='reports', max_retries=3)
+def update_campaign_dashboard(campaign_id):
+    """
+    Update the Campaign dashboard
+    :param campaign_id:
+    :return: None
+    """
+    current_day = datetime.datetime.now()
+    append_rate = 0.00
+    total_appends = 0
+    total_rvms = 0
+    total_rtns = 0
+    us_visitors = 0
+
+    # check the instance of store_id
+    if not isinstance(campaign_id, int):
+        store_id = int(campaign_id)
+
+    # ok, get the campaign - active campaigns only
+    try:
+        campaign = Campaign.query.filter(
+            Campaign.id == campaign_id,
+            Campaign.status == 'ACTIVE'
+        ).one()
+
+        # do we have a valid campaign
+        if campaign:
+
+            us_visitors = Visitor.query.filter(Visitor.campaign_id == campaign.id, Visitor.country_code == 'US').count()
+            total_appends = Visitor.query.join(
+                AppendedVisitor, Visitor.id == AppendedVisitor.visitor
+            ).filter(Visitor.campaign_id == campaign.id).count()
+
+            stmt1 = text("SELECT count(l.id) as total_rtns "
+                         "from visitors v, appendedvisitors av, leads l where v.id = av.visitor "
+                         "and l.appended_visitor_id = av.id "
+                         "and v.campaign_id={} "
+                         "and l.sent_to_dealer=1".format(campaign.id))
+            stmt2 = text("SELECT count(l.id) as total_followup_emails "
+                         "from visitors v, appendedvisitors av, leads l where v.id = av.visitor "
+                         "and l.appended_visitor_id = av.id "
+                         "and v.campaign_id={} "
+                         "and l.followup_email=1".format(campaign.id))
+            stmt3 = text("SELECT count(l.id) as total_rvms "
+                         "from visitors v, appendedvisitors av, leads l where v.id = av.visitor "
+                         "and l.appended_visitor_id = av.id "
+                         "and v.campaign_id={} "
+                         "and l.rvm_sent=1".format(campaign.id))
+
+            # set the values
+            total_rtns = db.session.query('total_rtns').from_statement(stmt1).all()
+            total_followup_emails = db.session.query('total_followup_emails').from_statement(stmt2).all()
+            total_rvms = db.session.query('total_rvms').from_statement(stmt3).all()
+
+            # calc the rates
+            if total_appends > 0:
+                append_rate = float(int(total_appends) / int(us_visitors) * 100.0)
+
+                try:
+
+                    new_dashboard = CampaignDashboard(
+                        store_id=campaign.store_id,
+                        campaign_id=campaign.id,
+                        total_visitors=us_visitors,
+                        total_appends=total_appends,
+                        total_rtns=total_rtns[0][0],
+                        total_followup_emails=total_followup_emails[0][0],
+                        total_rvms=total_rvms[0][0],
+                        append_rate=append_rate,
+                        last_update=current_day
+                    )
+
+                    db.session.add(new_dashboard)
+                    db.session.commit()
+
+                    # log the result
+                    logger.info('Campaign {} Dealer Dashboard was updated at {}.'.format(campaign.name, current_day))
+
+                # log the exception
+                except exc.SQLAlchemyError as err:
+                    logger.info('Database returned error: {}'.format(str(err)))
+
+        else:
+            # log the result
+            logger.info('Campaign {} Not Found.  Task Aborted!'.format(campaign_id))
 
     except exc.SQLAlchemyError as err:
         logger.info('Database returned error: {}'.format(str(err)))
