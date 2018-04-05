@@ -1232,7 +1232,7 @@ def send_rvm(lead_id):
                                 }
 
                                 # post the data payload to the dialer central service
-                                r = requests.post(dialercentral_debug_url, headers=hdr, data=json.dumps(payload))
+                                r = requests.post(dialercentral_url, headers=hdr, data=json.dumps(payload))
 
                                 # hey look, we got a response from Dialer Central
                                 if r.status_code == 201:
