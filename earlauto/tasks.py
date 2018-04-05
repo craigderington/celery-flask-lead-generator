@@ -1701,6 +1701,7 @@ def get_expired_campaigns():
     Generate a list of active campaigns by ID and send into the Mark Campaign Inactive
     :return: list of active campaign ID's
     """
+    campaign_count = 0
 
     try:
         # do some date stuff
@@ -1716,10 +1717,10 @@ def get_expired_campaigns():
 
         # we have active campaigns to update
         if active_campaigns:
-            campaign_count = len(active_campaigns)
 
             for campaign in active_campaigns:
                 deactivate_campaign.delay(campaign.id)
+                campaign_count += 1
 
             # log the result
             logger.info('EARL Automation airdropped {} active campaigns to '
@@ -1970,9 +1971,9 @@ def update_campaign_dashboard(campaign_id):
     total_rtns = 0
     us_visitors = 0
 
-    # check the instance of store_id
+    # check the instance of campaign_id
     if not isinstance(campaign_id, int):
-        store_id = int(campaign_id)
+        campaign_id = int(campaign_id)
 
     # ok, get the campaign - active campaigns only
     try:
@@ -2043,4 +2044,43 @@ def update_campaign_dashboard(campaign_id):
             logger.info('Campaign {} Not Found.  Task Aborted!'.format(campaign_id))
 
     except exc.SQLAlchemyError as err:
+        logger.info('Database returned error: {}'.format(str(err)))
+
+
+@celery.task(queue='reports', max_retries=3)
+def get_campaigns_for_dashboard():
+    """
+    Get the Active Campaigns to Send to the Campaign Dashboard Task
+    :return: none
+    """
+    current_date = datetime.datetime.now()
+    str_date = current_date.strftime('%Y-%m-%d')
+    report_date = datetime.datetime.strptime(str_date + ' 23:59:59', '%Y-%m-%d %H:%M:%S')
+    campaign_count = 0
+
+    # get a list of active campaigns
+    try:
+        campaigns = Campaign.query.filter(
+            Campaign.status == 'ACTIVE',
+            Campaign.end_date >= report_date
+        ).all()
+
+        # ok, we have a queryset object
+        if campaigns:
+
+            # loop over the queryset and call the dashboard function
+            for campaign in campaigns:
+                update_campaign_dashboard.delay(campaign.id)
+                campaign_count += 1
+
+            # log the result
+            logger.info('EARL Automation airdropped {} campaigns into the '
+                        'Campaign Dashboard Task.'.format(str(campaign_count)))
+
+        else:
+            # log the result
+            logger.info('There were zero active campaigns to call for a Dashboard update.  Task aborted!')
+
+    except exc.SQLAlchemyError as err:
+        # log the result
         logger.info('Database returned error: {}'.format(str(err)))
