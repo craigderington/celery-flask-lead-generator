@@ -1911,7 +1911,7 @@ def update_global_dashboard():
         total_appends = AppendedVisitor.query.count()
         total_rtns = Lead.query.filter(Lead.sent_to_dealer == 1).count()
         total_followup_emails = Lead.query.filter(Lead.followup_email == 1).count()
-        total_rvms = Lead.query.filter(Lead.rvm_sent == 1, Lead.rvm_message == 'LOADED').count()
+        total_rvms = Lead.query.filter(Lead.rvm_sent == 1, Lead.rvm_status == 'LOADED').count()
 
         # calc the percentages
         total_global_visitors = int(global_visitors[0][0])
