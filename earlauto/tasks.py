@@ -324,9 +324,9 @@ def append_visitor(new_visitor_id):
                                             address = json_obj[0]['Address']
                                             zip4 = json_obj[0]['Zip4']
                                             phone = json_obj[0]['Cell']
-                                            # ppm_type = json_obj[0]['ppm_type']
-                                            # ppm_indicator = json_obj[0]['ppm_indicator']
-                                            # ppm_segment = json_obj[0]['ppm_segment']
+                                            ppm_type = json_obj[0]['PPM_Type']
+                                            ppm_indicator = json_obj[0]['PPM_Indicator']
+                                            ppm_segment = json_obj[0]['PPM_Segment']
 
                                             # create the appended visitor record and commit
                                             appended_visitor = AppendedVisitor(
@@ -346,10 +346,10 @@ def append_visitor(new_visitor_id):
                                                 car_year=car_year,
                                                 car_model=car_model.title(),
                                                 car_make=car_make.capitalize(),
-                                                processed=False
-                                                # ppm_type=ppm_type,
-                                                # ppm_indicator=ppm_indicator,
-                                                # ppm_segment=ppm_segment
+                                                processed=False,
+                                                ppm_type=ppm_type,
+                                                ppm_indicator=ppm_indicator,
+                                                ppm_segment=ppm_segment
                                             )
 
                                             db.session.add(appended_visitor)
