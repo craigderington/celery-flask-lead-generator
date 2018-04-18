@@ -2084,3 +2084,117 @@ def get_campaigns_for_dashboard():
     except exc.SQLAlchemyError as err:
         # log the result
         logger.info('Database returned error: {}'.format(str(err)))
+
+
+@celery.task(queue='reports', max_retries=3)
+def admin_campaign_report():
+    """
+    Return a CSV of the admin campaign report and send to EARL Validation Email
+    :return: mailgun response
+    """
+    # mailgun
+    mailgun_url = 'https://api.mailgun.net/v3/mail.earlbdc.com/messages'
+    mailgun_sandbox_url = 'https://api.mailgun.net/v3/sandbox3b609311624841c0bb2f9154e41e34de.mailgun.org/messages'
+    mailgun_apikey = 'key-dfd370f4412eaccce27394f7bceaee0e'
+
+    current_day = datetime.datetime.now()
+    one_day_ago = current_day - timedelta(days=1)
+    yesterday = one_day_ago.strftime('%Y-%m-%d')
+    # start_date = datetime.datetime.strptime(yesterday + ' 00:00:00', '%Y-%m-%d %H:%M:%S')
+    # end_date = datetime.datetime.strptime(yesterday + ' 23:59:59', '%Y-%m-%d %H:%M:%S')
+    start_date = '2018-03-30 00:00:00'
+    end_date = '2018-03-30 23:59:59'
+    rows = []
+
+    try:
+        stmt1 = text("select c.job_number, c.name as campaign_name, "
+                     "count(v.id) as total_visitors, "
+                     "count(av.id) as total_appends "                    
+                     "from visitors v, appendedvisitors av, campaigns c "
+                     "where v.id = av.visitor "
+                     "and v.campaign_id = c.id "
+                     "and c.status = '{}' "
+                     "and (v.created_date between '{}' and '{}') "
+                     "group by c.job_number, c.name "
+                     "ORDER BY c.job_number, c.name asc".format('ACTIVE', start_date, end_date))
+
+        results = db.session.query('job_number', 'campaign_name',
+                                   'total_visitors', 'total_appends').from_statement(stmt1).all()
+
+        if results:
+            """
+            for result in results:
+                print(result.job_number, result.campaign_name, result.total_visitors, result.total_appends)
+
+            else:
+                print('No results...')
+            """
+
+            for result in results:
+                row = []
+                row.append(result.job_number)
+                row.append(result.campaign_name)
+                row.append(result.total_visitors)
+                row.append(result.total_appends)
+                rows.append(row)
+
+            # set the header row
+            si = StringIO()
+            row_heading = []
+            row_heading.append('Job Number')
+            row_heading.append('Campaign Tactic and Name')
+            row_heading.append('Total Visitors')
+            row_heading.append('Total Appends')
+
+            writer = csv.writer(si)
+            writer.writerow(row_heading)
+
+            for row in rows:
+                writer.writerow(row)
+
+            csv_content = si.getvalue().strip('\r\n')
+
+            # name the file
+            report_file_name = 'Admin-Campaign-Daily-Report.csv'
+            report_data = csv_content
+
+            # setup email vars
+            msg_subject = 'Admin Campaign Daily Report for {}'.format(str(yesterday))
+            msg_body_text = 'Please see attached Admin Campaign Daily Report for {}'.format(str(yesterday))
+
+            # set up mailgun payload
+            payload = {
+                "from": "EARL Automation Server v.01 <mailgun@earlbdc.com>",
+                "to": "earl-email-validation@contactdms.com",
+                "bcc": "craigderington@python-development-systems.com",
+                "subject": msg_subject,
+                "text": msg_body_text
+            }
+
+            # let's call mailgun and chat
+            try:
+                r = requests.post(mailgun_url, auth=('api', mailgun_apikey),
+                                  files={"attachment": (report_file_name, report_data)},
+                                  data=payload)
+
+                # mg response is OK!
+                if r.status_code == 200:
+                    # log the result
+                    logger.info('The Admin Campaign Daily Report was sent on {}'.format(str(yesterday)))
+
+                # oh, no, we got an error sending the report
+                else:
+                    logger.info('Mailgun returned: {}.  Will retry soon...'.format(str(r.status_code)))
+
+            # we got an http error, that's bad news.
+            except requests.HTTPError as http_err:
+                # log the result
+                logger.warning('Mailgun returned HTTP Error Code: {}'.format(http_err))
+
+        else:
+            # log the result
+            logger.info('The Admin campaign Daily Report returned ZERO results.  Task aborted.')
+
+    except exc.SQLAlchemyError as err:
+        # log the result
+        logger.info('Database returned error: {}'.format(str(err)))

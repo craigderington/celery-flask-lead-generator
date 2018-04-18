@@ -3,7 +3,7 @@ from celery.schedules import crontab
 from earlauto import create_app
 from earlauto.tasks import log, get_new_visitors, resend_http_errors, resend_leads_to_dealer, \
     get_recap_report_campaigns, get_stores_for_dashboard, update_global_dashboard, get_expired_campaigns, \
-    get_campaigns_for_dashboard
+    get_campaigns_for_dashboard, admin_campaign_report
 
 
 def create_celery(app):
@@ -55,6 +55,13 @@ def setup_periodic_tasks(sender, **kwargs):
 
     sender.add_periodic_task(
         crontab(hour=0, minute=5),
+        admin_campaign_report,
+        name='Send Admin Campaign Daily Report'
+    )
+
+    sender.add_periodic_task(
+        crontab(hour=0, minute=10),
         get_expired_campaigns,
         name='Get Active Campaigns by End Date and Mark Inactive'
     )
+
