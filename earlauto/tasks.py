@@ -2108,7 +2108,7 @@ def admin_campaign_report():
 
     try:
         stmt1 = text("select c.job_number, c.name as campaign_name, "
-                     "count(v.id) as total_visitors, "
+                     "sum(v.num_visits) as total_visitors, "
                      "count(av.id) as total_appends "                    
                      "from visitors v, appendedvisitors av, campaigns c "
                      "where v.id = av.visitor "
