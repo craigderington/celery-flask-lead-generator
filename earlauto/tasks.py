@@ -2100,10 +2100,10 @@ def admin_campaign_report():
     current_day = datetime.datetime.now()
     one_day_ago = current_day - timedelta(days=1)
     yesterday = one_day_ago.strftime('%Y-%m-%d')
-    # start_date = datetime.datetime.strptime(yesterday + ' 00:00:00', '%Y-%m-%d %H:%M:%S')
-    # end_date = datetime.datetime.strptime(yesterday + ' 23:59:59', '%Y-%m-%d %H:%M:%S')
-    start_date = '2018-03-30 00:00:00'
-    end_date = '2018-03-30 23:59:59'
+    start_date = datetime.datetime.strptime(yesterday + ' 00:00:00', '%Y-%m-%d %H:%M:%S')
+    end_date = datetime.datetime.strptime(yesterday + ' 23:59:59', '%Y-%m-%d %H:%M:%S')
+    # start_date = '2018-03-30 00:00:00'
+    # end_date = '2018-03-30 23:59:59'
     rows = []
 
     try:
