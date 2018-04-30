@@ -1608,7 +1608,7 @@ def send_daily_recap_report(campaign_id):
                 csv_content = si.getvalue().strip('\r\n')
 
                 # name the file
-                report_file_name = 'Daily-Recap-Report.csv'
+                report_file_name = 'Daily-Recap-Report-{}.csv'.format(yesterday)
                 report_data = csv_content
 
                 # set up mailgun payload
@@ -2155,7 +2155,7 @@ def admin_campaign_report():
             csv_content = si.getvalue().strip('\r\n')
 
             # name the file
-            report_file_name = 'Admin-Campaign-Daily-Report.csv'
+            report_file_name = 'Admin-Campaign-Daily-Report-{}.csv'.format(yesterday)
             report_data = csv_content
 
             # setup email vars
