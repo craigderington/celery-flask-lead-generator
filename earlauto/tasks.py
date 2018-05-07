@@ -175,56 +175,68 @@ def get_new_visitors():
                         Campaign.client_id == client_id
                     )).first()
 
-                    new_visitor = Visitor(
-                        campaign_id=campaign.id,
-                        store_id=campaign.store_id,
-                        created_date=sent_date,
-                        ip=ip_addr,
-                        user_agent=agent,
-                        job_number=job_number,
-                        client_id=client_id,
-                        open_hash=open_hash,
-                        campaign_hash=campaign_hash,
-                        send_hash=send_hash,
-                        num_visits=1,
-                        last_visit=sent_date,
-                        raw_data=raw_data,
-                        processed=False,
-                        country_name=geo_data['country_name'],
-                        city=geo_data['city'],
-                        time_zone=geo_data['time_zone'],
-                        longitude=geo_data['longitude'],
-                        latitude=geo_data['latitude'],
-                        metro_code=geo_data['metro_code'],
-                        country_code=geo_data['country_code'],
-                        country_code3=geo_data['country_code3'],
-                        dma_code=geo_data['dma_code'],
-                        area_code=geo_data['area_code'],
-                        postal_code=geo_data['postal_code'],
-                        region=geo_data['region'],
-                        region_name=geo_data['region_name'],
-                        traffic_type='',
-                        retry_counter=0,
-                        last_retry=datetime.datetime.now(),
-                        status='NEW'
-                    )
+                    try:
+                        # create the new visitor obj
+                        new_visitor = Visitor(
+                            campaign_id=campaign.id,
+                            store_id=campaign.store_id,
+                            created_date=sent_date,
+                            ip=ip_addr,
+                            user_agent=agent,
+                            job_number=job_number,
+                            client_id=client_id,
+                            open_hash=open_hash,
+                            campaign_hash=campaign_hash,
+                            send_hash=send_hash,
+                            num_visits=1,
+                            last_visit=sent_date,
+                            raw_data=raw_data,
+                            processed=False,
+                            country_name=geo_data['country_name'],
+                            city=geo_data['city'],
+                            time_zone=geo_data['time_zone'],
+                            longitude=geo_data['longitude'],
+                            latitude=geo_data['latitude'],
+                            metro_code=geo_data['metro_code'],
+                            country_code=geo_data['country_code'],
+                            country_code3=geo_data['country_code3'],
+                            dma_code=geo_data['dma_code'],
+                            area_code=geo_data['area_code'],
+                            postal_code=geo_data['postal_code'],
+                            region=geo_data['region'],
+                            region_name=geo_data['region_name'],
+                            traffic_type='',
+                            retry_counter=0,
+                            last_retry=datetime.datetime.now(),
+                            status='NEW'
+                        )
 
-                    # add the new visitor and commit
-                    db.session.add(new_visitor)
-                    db.session.commit()
+                        # add the new visitor and commit
+                        db.session.add(new_visitor)
+                        db.session.commit()
 
-                    # update the processed flag in MongoDB and set to True
-                    sent_collection.update_one({'_id': record_id}, {'$set': {'processed': 1}}, True)
+                        # update the processed flag in MongoDB and set to True
+                        sent_collection.update_one({'_id': record_id}, {'$set': {'processed': 1}}, True)
 
-                    # log the result
-                    logger.info('Visitor from {} created for Store ID: {} for Campaign: {}. '.format(
-                        new_visitor.ip,
-                        new_visitor.store_id,
-                        new_visitor.campaign_hash
-                    ))
+                        # log the result
+                        logger.info('Visitor from {} created for Store ID: {} for Campaign: {}. '.format(
+                            new_visitor.ip,
+                            new_visitor.store_id,
+                            new_visitor.campaign_hash
+                        ))
 
-                    # next task >> append_visitor
-                    append_visitor.delay(new_visitor.id)
+                        # next task >> append_visitor
+                        append_visitor.delay(new_visitor.id)
+
+                    # catch database exception, process mongo-db visitor
+                    # record and update to continue processing
+                    except exc.SQLAlchemyError as err:
+
+                        # log the result
+                        logger.info('Database returned: {}'.format(str(err)))
+
+                        # update the processed flag in MongoDB and set to True to continue
+                        sent_collection.update_one({'_id': record_id}, {'$set': {'processed': 1}}, True)
 
             # return new visitor count to the console
             return data_count
