@@ -860,7 +860,7 @@ def send_auto_adf_lead(lead_id):
     :param lead_id:
     :return: lead_id
     """
-
+    r = None
     mailgun_url = 'https://api.mailgun.net/v3/mail.earlbdc.com/messages'
     mailgun_sandbox_url = 'https://api.mailgun.net/v3/sandbox3b609311624841c0bb2f9154e41e34de.mailgun.org/messages'
     mailgun_apikey = 'key-dfd370f4412eaccce27394f7bceaee0e'
@@ -904,89 +904,120 @@ def send_auto_adf_lead(lead_id):
                         CampaignType.id == campaign_type_id
                     ).one()
 
+                    # check for required lead data - first, last, phone and email
+                    adf_fields = [result[7], result[8], result[13], result[14]]
+                    has_adf_fields = all(adf_fields)
+                    adf_store_id = result[4]
+
                     # the store must have a valid ADF email address
                     if result[6]:
 
-                        # create the payload
-                        payload = {
-                            "from": "EARL ADF Lead <mailgun@earlbdc.com>",
-                            "to": str(result[6]),
-                            "cc": "earl-email-validation@contactdms.com",
-                            "subject": str(result[5]) + ' ' + campaign_type.name + ' DMS XML Lead',
-                            "text": "<?xml version='1.0' encoding='UTF-8'?>" +
-                            "<?ADF VERSION='1.0'?>" +
-                            "<adf>" +
-                            "<prospect>" +
-                            "<requestdate>" + datetime.datetime.now().strftime("%x") + "</requestdate>" +
-                            "<vehicle interest='trade-in' status='used'>" +
-                            '<id sequence="1" source="' + str(result[5]) + ' ' + campaign_type.name + ' DMS"></id>' +
-                            "<year>" + str(result[16]) + "</year>" +
-                            "<make>" + str(result[18]) + "</make>" +
-                            "<model>" + str(result[17]) + "</model>" +
-                            "</vehicle>" +
-                            "<customer>" +
-                            "<contact>" +
-                            "<name part='full'>" + str(result[7]) + ' ' + str(result[8]) + "</name>" +
-                            "<address type='home'>" +
-                            "<street>" + str(result[9]) + "</street>" +
-                            "<city>" + str(result[10]) + "</city>" +
-                            "<regioncode>" + str(result[11]) + "</regioncode>" +
-                            "<postalcode>" + str(result[12]) + "</postalcode>" +
-                            "</address>" +
-                            "<email>" + str(result[13]) + "</email>" +
-                            "<phone>" + str(result[14]) + "</phone>" +
-                            "</contact>" +
-                            "<comments>Estimated Credit: " + str(result[15]) + "</comments>" +
-                            "</customer>" +
-                            '<vendor>' +
-                            '<id source="' + str(result[5]) + ' DMS">' + str(result[5]) + ' ' + campaign_type.name + ' DMS</id>' +
-                            "<vendorname>" + str(result[5]) + "</vendorname>" +
-                            "<contact>" +
-                            "<name part='full'>" + str(result[5]) + "</name>" +
-                            "</contact>" +
-                            "</vendor>" +
-                            "<provider>" +
-                            "<name part='full'>" + str(result[5]) + ' ' + campaign_type.name + " DMS</name>" +
-                            "<service>" + str(result[5]) + ' ' + campaign_type.name + " DMS</service>" +
-                            "<url>None</url>" +
-                            "</provider>" +
-                            "<leadtype>digital plus</leadtype>" +
-                            "</prospect>" +
-                            "</adf>",
-                            "o:tag": 'ADF CRM email',
-                            "o:tracking": 'False',
-                        }
+                        # some store adf_email fields contain none as a string. quick fix.
+                        if result[6] != 'None':
 
-                        # call M1 and send the email as plan ascii text
-                        r = requests.post(mailgun_url, auth=('api', mailgun_apikey), data=payload)
+                            # create the payload
+                            payload = {
+                                "from": "EARL ADF Lead <mailgun@earlbdc.com>",
+                                "to": str(result[6]),
+                                "cc": "earl-email-validation@contactdms.com",
+                                "subject": str(result[5]) + ' ' + campaign_type.name + ' DMS XML Lead',
+                                "text": "<?xml version='1.0' encoding='UTF-8'?>" +
+                                "<?ADF VERSION='1.0'?>" +
+                                "<adf>" +
+                                "<prospect>" +
+                                "<requestdate>" + datetime.datetime.now().strftime("%x") + "</requestdate>" +
+                                "<vehicle interest='trade-in' status='used'>" +
+                                '<id sequence="1" source="' + str(result[5]) + ' ' + campaign_type.name + ' DMS"></id>' +
+                                "<year>" + str(result[16]) + "</year>" +
+                                "<make>" + str(result[18]) + "</make>" +
+                                "<model>" + str(result[17]) + "</model>" +
+                                "</vehicle>" +
+                                "<customer>" +
+                                "<contact>" +
+                                "<name part='full'>" + str(result[7]) + ' ' + str(result[8]) + "</name>" +
+                                "<address type='home'>" +
+                                "<street>" + str(result[9]) + "</street>" +
+                                "<city>" + str(result[10]) + "</city>" +
+                                "<regioncode>" + str(result[11]) + "</regioncode>" +
+                                "<postalcode>" + str(result[12]) + "</postalcode>" +
+                                "</address>" +
+                                "<email>" + str(result[13]) + "</email>" +
+                                "<phone>" + str(result[14]) + "</phone>" +
+                                "</contact>" +
+                                "<comments>Estimated Credit: " + str(result[15]) + "</comments>" +
+                                "</customer>" +
+                                '<vendor>' +
+                                '<id source="' + str(result[5]) + ' DMS">' + str(result[5]) + ' ' + campaign_type.name + ' DMS</id>' +
+                                "<vendorname>" + str(result[5]) + "</vendorname>" +
+                                "<contact>" +
+                                "<name part='full'>" + str(result[5]) + "</name>" +
+                                "</contact>" +
+                                "</vendor>" +
+                                "<provider>" +
+                                "<name part='full'>" + str(result[5]) + ' ' + campaign_type.name + " DMS</name>" +
+                                "<service>" + str(result[5]) + ' ' + campaign_type.name + " DMS</service>" +
+                                "<url>None</url>" +
+                                "</provider>" +
+                                "<leadtype>digital plus</leadtype>" +
+                                "</prospect>" +
+                                "</adf>",
+                                "o:tag": 'ADF CRM email',
+                                "o:tracking": 'False',
+                            }
 
-                        # check the response code
-                        if r.status_code == 200:
+                            # call M1 and send the email as plan ascii text
+                            # test conditions for Lithia Chrysler
+                            if adf_store_id == 34:
+                                if has_adf_fields is True:
+                                    r = requests.post(mailgun_url, auth=('api', mailgun_apikey), data=payload)
 
-                            # assign the response a variable
-                            mg_response = r.json()
+                                else:
+                                    # log the output
+                                    logger.info('Notice: Lithia Chrysler Dodge Jeep Anchorage - '
+                                                'Missing Required Lead Fields for Store ID: {}'.format(adf_store_id))
+                            else:
+                                # send ADF email for all other stores
+                                r = requests.post(mailgun_url, auth=('api', mailgun_apikey), data=payload)
 
-                            if 'id' in mg_response:
-                                lead.sent_adf = True
-                                lead.adf_email_receipt_id = mg_response['id']
-                                lead.adf_email_validation_message = mg_response['message']
+                            # check the response code
+                            if r.status_code == 200:
+
+                                # assign the response a variable
+                                mg_response = r.json()
+
+                                if 'id' in mg_response:
+                                    lead.sent_adf = True
+                                    lead.adf_email_receipt_id = mg_response['id']
+                                    lead.adf_email_validation_message = mg_response['message']
+                                    db.session.commit()
+
+                                    # log the result
+                                    logger.info('ADF email sent to {} for Lead ID: {}'.format(
+                                        result[5], lead.id
+                                    ))
+
+                                    if adf_store_id == 34:
+                                        if has_adf_fields is True:
+                                            # log this extra result to monitor in the console
+                                            logger.info('Lithia Chrysler Store.  '
+                                                        'Check Required Fields: {}'.format(adf_fields))
+
+                            # we did not get a valid HTTP response
+                            else:
+                                # do we want to continue to re-try this task
+                                lead.sent_adf = False
+                                lead.adf_email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
+                                lead.adf_email_validation_message = 'NOT SENT'
                                 db.session.commit()
 
                                 # log the result
-                                logger.info('ADF email sent to {} for Lead ID: {}'.format(
-                                    result[5], lead.id
-                                ))
+                                logger.warning('Lead ID: {} ADF email send returned an '
+                                               'HTTP Error {}.'.format(lead.id, r.status_code))
 
-                        # we did not get a valid HTTP response
+                        # the store adf email is None.  Skip the ADF email
                         else:
-                            # do we want to continue to re-try this task
-                            lead.sent_adf = False
-                            lead.adf_email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
-                            lead.adf_email_validation_message = 'NOT SENT'
-                            db.session.commit()
-
-                            # log the result
-                            logger.warning('Lead ID: {} ADF email send returned an HTTP Error.'.format(lead.id))
+                            logger.info('Store ID: {} has no ADF email configured.  '
+                                        'Task aborted'.format(result.store_id))
 
                     # the store does not have an adf email configured.  can not send
                     else:
@@ -1003,6 +1034,7 @@ def send_auto_adf_lead(lead_id):
         else:
             logger.info('Lead ID: {} was not found.  Task aborted!'.format(lead_id))
 
+    # log the database error
     except exc.SQLAlchemyError as err:
         logger.warning('Database returned error: {}'.format(str(err)))
 
@@ -1073,6 +1105,7 @@ def send_followup_email(lead_id):
                                     "to": av.email,
                                     "subject": campaign.email_subject,
                                     "html": html,
+                                    "o:tracking": "True"
                                 }
 
                                 # post the request to mailgun
