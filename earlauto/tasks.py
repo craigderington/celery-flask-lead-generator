@@ -969,13 +969,21 @@ def send_auto_adf_lead(lead_id):
                             # test conditions for Lithia Chrysler
                             if adf_store_id == 34:
                                 if has_adf_fields is True:
-                                    # call mailgun and send adf for lithia stores
+                                    # call mailgun and send adf for lithia stores id data requirements are met
                                     r = requests.post(mailgun_url, auth=('api', mailgun_apikey), data=payload)
 
                                 else:
-                                    # log the output
+                                    # set up a mailgun payload data obj
+                                    data = {"from": "EARL ADF Lead <mailgun@earlbdc.com>",
+                                            "to": "craigderington@opython-development-systems.com",
+                                            "subject": "Lithia ADF - Lead Data Not Sent",
+                                            "text": "Lead data for " + lead_id + " was not sent to Lithia ADF"}
+
+                                    # send the request
                                     r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_apikey),
-                                                      data=adf_fields)
+                                                      data=data)
+
+                                    # log the output
                                     logger.info('Notice: Lithia Chrysler Dodge Jeep Anchorage - '
                                                 'Missing Required Lead Fields for Store ID: {}'.format(adf_store_id))
                             else:
