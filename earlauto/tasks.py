@@ -965,12 +965,19 @@ def send_auto_adf_lead(lead_id):
                                 "o:tracking": 'False',
                             }
 
-                            # call M1 and send the email as plan ascii text
+                            # call M1 and send the email as plain ascii text
                             # test conditions for Lithia Chrysler
                             if adf_store_id == 34:
                                 if has_adf_fields is True:
-                                    # call mailgun and send adf for lithia stores id data requirements are met
-                                    r = requests.post(mailgun_url, auth=('api', mailgun_apikey), data=payload)
+
+                                    # call mailgun and send adf for lithia stores if data requirements are met
+                                    try:
+                                        r = requests.post(mailgun_url, auth=('api', mailgun_apikey), data=payload)
+
+                                    except requests.HTTPError as http_err:
+                                        # log the event to the console
+                                        logger.info('Mailgun returned HTTP error {} for '
+                                                    'ADF email for Lead ID: {}'.format(str(http_err), str(lead_id)))
 
                                 else:
                                     # set up a mailgun payload data obj
@@ -979,16 +986,28 @@ def send_auto_adf_lead(lead_id):
                                             "subject": "Lithia ADF - Lead Data Not Sent",
                                             "text": "Lead data for " + str(lead_id) + " was not sent to Lithia ADF"}
 
-                                    # send the request
-                                    r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_apikey),
-                                                      data=data)
+                                    # send the request to mailgun
+                                    try:
+                                        r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_apikey), data=data)
 
-                                    # log the output
-                                    logger.info('Notice: Lithia Chrysler Dodge Jeep Anchorage - '
-                                                'Missing Required Lead Fields for Store ID: {}'.format(adf_store_id))
+                                        # log the output
+                                        logger.info('Notice: Lithia Chrysler Dodge Jeep Anchorage - Missing '
+                                                    'Required Lead Fields for Store ID: {}'.format(adf_store_id))
+
+                                    except requests.HTTPError as http_err:
+                                        # log the event
+                                        logger.info('Mailgun returned HTTP error {} for '
+                                                    'ADF email for Lead ID: {}'.format(str(http_err), str(lead_id)))
+
                             else:
                                 # send ADF email for all other stores
-                                r = requests.post(mailgun_url, auth=('api', mailgun_apikey), data=payload)
+                                try:
+                                    r = requests.post(mailgun_url, auth=('api', mailgun_apikey), data=payload)
+
+                                except requests.HTTPError as http_err:
+                                    # log the event
+                                    logger.info('Mailgun returned HTTP error {} for '
+                                                'ADF email for Lead ID: {}'.format(str(http_err), str(lead_id)))
 
                             # check the response code
                             if r.status_code == 200:
