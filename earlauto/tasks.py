@@ -974,7 +974,8 @@ def send_auto_adf_lead(lead_id):
 
                                 else:
                                     # log the output
-                                    r.status_code = 404
+                                    r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_apikey),
+                                                      data=adf_fields)
                                     logger.info('Notice: Lithia Chrysler Dodge Jeep Anchorage - '
                                                 'Missing Required Lead Fields for Store ID: {}'.format(adf_store_id))
                             else:
