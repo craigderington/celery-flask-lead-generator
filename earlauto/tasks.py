@@ -565,7 +565,7 @@ def create_lead(appended_visitor_id):
 
         else:
             # log the result
-            logger.warning('Campaign {} is INACTIVE.  Not sending.  Goodbye and good riddance...')
+            logger.warning('Campaign {} is INACTIVE.  Not sending.  Goodbye and good riddance...'.format(campaign.id))
 
         # return the task argument 'visitor ID' to the console
         return visitor_id
@@ -977,7 +977,7 @@ def send_auto_adf_lead(lead_id):
                                     data = {"from": "EARL ADF Lead <mailgun@earlbdc.com>",
                                             "to": "craigderington@opython-development-systems.com",
                                             "subject": "Lithia ADF - Lead Data Not Sent",
-                                            "text": "Lead data for " + lead_id + " was not sent to Lithia ADF"}
+                                            "text": "Lead data for " + str(lead_id) + " was not sent to Lithia ADF"}
 
                                     # send the request
                                     r = requests.post(mailgun_sandbox_url, auth=('api', mailgun_apikey),
