@@ -905,7 +905,7 @@ def send_auto_adf_lead(lead_id):
                     ).one()
 
                     # check for required lead data - first, last, phone and email
-                    adf_fields = [result[7], result[8], result[13], result[14]]
+                    adf_fields = [str(result[7]), str(result[8]), str(result[13]), str(result[14])]
                     has_adf_fields = all(adf_fields)
                     adf_store_id = result[4]
 
@@ -969,6 +969,7 @@ def send_auto_adf_lead(lead_id):
                             # test conditions for Lithia Chrysler
                             if adf_store_id == 34:
                                 if has_adf_fields is True:
+                                    # call mailgun and send adf for lithia stores
                                     r = requests.post(mailgun_url, auth=('api', mailgun_apikey), data=payload)
 
                                 else:
