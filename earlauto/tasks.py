@@ -89,7 +89,7 @@ def get_new_visitors():
                 if item['ip'][-2:] == "::":
                     item['ip'] = "0.0.0.0"
                 elif len(item['ip']) > 15:
-                    str_ip = item['ip'].strip(',')
+                    str_ip = item['ip'].split(',')
                     item['ip'] = str_ip[0]
 
                 # check the IP against the local MySQL database
