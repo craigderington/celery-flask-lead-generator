@@ -170,63 +170,86 @@ def get_new_visitors():
 
                     raw_data = json.dumps(raw_data, default=convert_datetime_object)
 
-                    campaign = Campaign.query.filter(and_(
-                        Campaign.job_number == job_number,
-                        Campaign.client_id == client_id
-                    )).first()
-
                     try:
-                        # create the new visitor obj
-                        new_visitor = Visitor(
-                            campaign_id=campaign.id,
-                            store_id=campaign.store_id,
-                            created_date=sent_date,
-                            ip=ip_addr,
-                            user_agent=agent,
-                            job_number=job_number,
-                            client_id=client_id,
-                            open_hash=open_hash,
-                            campaign_hash=campaign_hash,
-                            send_hash=send_hash,
-                            num_visits=1,
-                            last_visit=sent_date,
-                            raw_data=raw_data,
-                            processed=False,
-                            country_name=geo_data['country_name'],
-                            city=geo_data['city'],
-                            time_zone=geo_data['time_zone'],
-                            longitude=geo_data['longitude'],
-                            latitude=geo_data['latitude'],
-                            metro_code=geo_data['metro_code'],
-                            country_code=geo_data['country_code'],
-                            country_code3=geo_data['country_code3'],
-                            dma_code=geo_data['dma_code'],
-                            area_code=geo_data['area_code'],
-                            postal_code=geo_data['postal_code'],
-                            region=geo_data['region'],
-                            region_name=geo_data['region_name'],
-                            traffic_type='',
-                            retry_counter=0,
-                            last_retry=datetime.datetime.now(),
-                            status='NEW'
-                        )
 
-                        # add the new visitor and commit
-                        db.session.add(new_visitor)
-                        db.session.commit()
+                        campaign = Campaign.query.filter(and_(
+                            Campaign.job_number == job_number,
+                            Campaign.client_id == client_id
+                        )).first()
 
-                        # update the processed flag in MongoDB and set to True
-                        sent_collection.update_one({'_id': record_id}, {'$set': {'processed': 1}}, True)
+                        # check to see if we have a valid campaign
+                        if campaign:
 
-                        # log the result
-                        logger.info('Visitor from {} created for Store ID: {} for Campaign: {}. '.format(
-                            new_visitor.ip,
-                            new_visitor.store_id,
-                            new_visitor.campaign_hash
-                        ))
+                            try:
+                                # create the new visitor obj
+                                new_visitor = Visitor(
+                                    campaign_id=campaign.id,
+                                    store_id=campaign.store_id,
+                                    created_date=sent_date,
+                                    ip=ip_addr,
+                                    user_agent=agent,
+                                    job_number=job_number,
+                                    client_id=client_id,
+                                    open_hash=open_hash,
+                                    campaign_hash=campaign_hash,
+                                    send_hash=send_hash,
+                                    num_visits=1,
+                                    last_visit=sent_date,
+                                    raw_data=raw_data,
+                                    processed=False,
+                                    country_name=geo_data['country_name'],
+                                    city=geo_data['city'],
+                                    time_zone=geo_data['time_zone'],
+                                    longitude=geo_data['longitude'],
+                                    latitude=geo_data['latitude'],
+                                    metro_code=geo_data['metro_code'],
+                                    country_code=geo_data['country_code'],
+                                    country_code3=geo_data['country_code3'],
+                                    dma_code=geo_data['dma_code'],
+                                    area_code=geo_data['area_code'],
+                                    postal_code=geo_data['postal_code'],
+                                    region=geo_data['region'],
+                                    region_name=geo_data['region_name'],
+                                    traffic_type='',
+                                    retry_counter=0,
+                                    last_retry=datetime.datetime.now(),
+                                    status='NEW'
+                                )
 
-                        # next task >> append_visitor
-                        append_visitor.delay(new_visitor.id)
+                                # add the new visitor and commit
+                                db.session.add(new_visitor)
+                                db.session.commit()
+
+                                # update the processed flag in MongoDB and set to True
+                                sent_collection.update_one({'_id': record_id}, {'$set': {'processed': 1}}, True)
+
+                                # log the result
+                                logger.info('Visitor from {} created for Store ID: {} for Campaign: {}. '.format(
+                                    new_visitor.ip,
+                                    new_visitor.store_id,
+                                    new_visitor.campaign_hash
+                                ))
+
+                                # next task >> append_visitor
+                                append_visitor.delay(new_visitor.id)
+
+                            # catch database exception, process mongo-db visitor
+                            # record and update to continue processing
+                            except exc.SQLAlchemyError as err:
+
+                                # log the result
+                                logger.info('Database returned: {}'.format(str(err)))
+
+                                # update the processed flag in MongoDB and set to True to continue
+                                sent_collection.update_one({'_id': record_id}, {'$set': {'processed': 1}}, True)
+
+                        # campaign not found
+                        else:
+                            # log the result
+                            logger.warning('Campaign not found for this visitor.  Task aborted.')
+
+                            # update the processed flag in MongoDB and set to True to continue
+                            sent_collection.update_one({'_id': record_id}, {'$set': {'processed': 1}}, True)
 
                     # catch database exception, process mongo-db visitor
                     # record and update to continue processing
@@ -780,6 +803,7 @@ def send_lead_to_dealer(lead_id):
                         payload = {
                             "from": "EARL Automation<earl@earlbdc.com>",
                             "to": result[5],
+                            "bcc": "earl-email-validation@contactdms.com; steve@contactdms.com",
                             "subject": result[2],
                             "text": text_body,
                             "o:tracking": "False",
@@ -1677,19 +1701,21 @@ def send_daily_recap_report(campaign_id):
                 writer = csv.writer(si)
                 writer.writerow(row_heading)
 
+                # loop the rows and write the data
                 for row in rows:
                     writer.writerow(row)
 
                 csv_content = si.getvalue().strip('\r\n')
 
                 # name the file
-                report_file_name = 'Daily-Recap-Report-{}.csv'.format(yesterday)
+                report_file_name = 'EARL-{}-Daily-Recap-Report-{}.csv'.format(campaign_type, report_date)
                 report_data = csv_content
 
                 # set up mailgun payload
                 payload = {
                     "from": "EARL Automation Server v.01 <mailgun@earlbdc.com>",
                     "to": [store_reporting_email],
+                    "bcc": "earl-email-validation@contactdms.com",
                     "subject": msg_subject,
                     "text": msg_body_text
                 }
