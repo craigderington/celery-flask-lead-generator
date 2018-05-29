@@ -1150,64 +1150,72 @@ def send_followup_email(lead_id):
                             # make sure we have creative
                             if campaign.creative_header and campaign.creative_footer:
 
-                                creative_header = campaign.creative_header
-                                creative_footer = campaign.creative_footer
-                                body_text = str(av.first_name + ' ' + av.last_name)
-                                html = creative_header + body_text + creative_footer
-                                payload = {
-                                    "from": "EARL Automation <mailgun@earlbdc.com>",
-                                    "to": av.email,
-                                    "subject": campaign.email_subject,
-                                    "html": html,
-                                    "o:tracking": "True"
-                                }
+                                if campaign.creative_header != 'Enter Header':
 
-                                # post the request to mailgun
-                                try:
+                                    creative_header = campaign.creative_header
+                                    creative_footer = campaign.creative_footer
+                                    body_text = str(av.first_name + ' ' + av.last_name)
+                                    html = creative_header + body_text + creative_footer
+                                    payload = {
+                                        "from": "EARL Automation <mailgun@earlbdc.com>",
+                                        "to": av.email,
+                                        "subject": campaign.email_subject,
+                                        "html": html,
+                                        "o:tracking": "True"
+                                    }
 
-                                    # make the call
-                                    r = requests.post(mailgun_url, auth=('api', mailgun_apikey), data=payload)
+                                    # post the request to mailgun
+                                    try:
 
-                                    # process the response
-                                    if r.status_code == 200:
-                                        mg_response = r.json()
+                                        # make the call
+                                        r = requests.post(mailgun_url, auth=('api', mailgun_apikey), data=payload)
 
-                                        if 'id' in mg_response:
-                                            lead.processed = True
-                                            lead.followup_email = True
-                                            lead.followup_email_receipt_id = mg_response['id']
-                                            lead.followup_email_status = mg_response['message']
-                                            lead.followup_email_sent_date = datetime.datetime.now()
+                                        # process the response
+                                        if r.status_code == 200:
+                                            mg_response = r.json()
+
+                                            if 'id' in mg_response:
+                                                lead.processed = True
+                                                lead.followup_email = True
+                                                lead.followup_email_receipt_id = mg_response['id']
+                                                lead.followup_email_status = mg_response['message']
+                                                lead.followup_email_sent_date = datetime.datetime.now()
+                                                db.session.commit()
+
+                                                # log the result
+                                                logger.info('Lead ID: {} email sent to {} on {}'.format(
+                                                    lead.id,
+                                                    body_text,
+                                                    datetime.datetime.now().strftime('%c')
+                                                ))
+
+                                                # send the rvm
+                                                send_rvm.delay(lead_id)
+
+                                        # we did not get a valid HTTP response
+                                        else:
+                                            # do we want to continue to re-try this task
+                                            lead.followup_email = False
+                                            lead.followup_email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
+                                            lead.followup_email_status = 'NOT SENT'
                                             db.session.commit()
 
                                             # log the result
-                                            logger.info('Lead ID: {} email sent to {} on {}'.format(
-                                                lead.id,
-                                                body_text,
-                                                datetime.datetime.now().strftime('%c')
-                                            ))
+                                            logger.warning('Did not receive a valid HTTP Response from Mailgun.  '
+                                                           'Will retry in 5, 4, 3, 2, 1...')
+                                            print('MailGun Response: {}'.format(r.content))
 
-                                            # send the rvm
-                                            send_rvm.delay(lead_id)
-
-                                    # we did not get a valid HTTP response
-                                    else:
-                                        # do we want to continue to re-try this task
-                                        lead.followup_email = False
-                                        lead.followup_email_receipt_id = 'HTTP Error: {}'.format(r.status_code)
-                                        lead.followup_email_status = 'NOT SENT'
-                                        db.session.commit()
+                                    # got an exception from requests
+                                    except requests.HTTPError as http_err:
 
                                         # log the result
-                                        logger.warning('Did not receive a valid HTTP Response from Mailgun.  '
-                                                       'Will retry in 5, 4, 3, 2, 1...')
-                                        print('MailGun Response: {}'.format(r.content))
+                                        logger.warning('MailGun communication error: {}'.format(http_err))
 
-                                # got an exception from requests
-                                except requests.HTTPError as http_err:
-
+                                # default values for creative
+                                else:
                                     # log the result
-                                    logger.warning('MailGun communication error: {}'.format(http_err))
+                                    logger.warning('Campaign ID: {} contains default creative.  '
+                                                   'Task Aborted!'.format(campaign.id))
 
                             # no campaign creative
                             else:
