@@ -777,7 +777,7 @@ def send_lead_to_dealer(lead_id):
                            'where l.appended_visitor_id = av.id '
                            'and av.visitor = v.id and v.store_id = s.id '
                            'and v.campaign_id = c.id '
-                           'and c.type = ct.id'
+                           'and c.type = ct.id '
                            'and l.id = {}'.format(verified_lead.id))
 
                 # we have a good result
