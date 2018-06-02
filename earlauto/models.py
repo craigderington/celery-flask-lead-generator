@@ -189,6 +189,9 @@ class Store(db.Model):
     simplifi_company_id = Column(Integer)
     simplifi_client_id = Column(String(255))
     simplifi_name = Column(String(255))
+    archived = Column(Boolean(), default=0)
+    archived_by = Column(String(50), nullable=True)
+    archived_date = Column(DateTime, nullable=True)
 
     def __repr__(self):
         return '{}'.format(
@@ -239,6 +242,13 @@ class Campaign(db.Model):
     rvm_send_count = Column(Integer, default=0)
     rvm_limit = Column(Integer, nullable=False, default=10000)
     adf_subject = Column(String(255))
+    archived = Column(Boolean(), default=0)
+    archived_by = Column(String(50), nullable=True)
+    archived_date = Column(DateTime, nullable=True)
+    send_dealer = Column(Boolean(), default=0)
+    send_adf = Column(Boolean(), default=0)
+    send_email = Column(Boolean(), default=0)
+    send_rvm = Column(Boolean(), default=0)
 
     def __repr__(self):
         return '{}'.format(

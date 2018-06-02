@@ -772,11 +772,12 @@ def send_lead_to_dealer(lead_id):
                 sql = text('select l.id as lead_id, c.id as campaign_id, c.name, c.status, s.id as store_id, '
                            's.notification_email, av.first_name, av.last_name, av.email, av.home_phone, av.address1, '
                            'av.address2, av.city, av.state, av.zip_code, av.zip_4, av.credit_range, av.car_year, '
-                           'av.car_make, av.car_model '
-                           'from leads l, campaigns c, stores s, appendedvisitors av, visitors v '
+                           'av.car_make, av.car_model, ct.name as tactic '
+                           'from leads l, campaigns c, stores s, appendedvisitors av, visitors v, campaigntypes ct '
                            'where l.appended_visitor_id = av.id '
                            'and av.visitor = v.id and v.store_id = s.id '
                            'and v.campaign_id = c.id '
+                           'and c.type = ct.id'
                            'and l.id = {}'.format(verified_lead.id))
 
                 # we have a good result
@@ -804,7 +805,7 @@ def send_lead_to_dealer(lead_id):
                             "from": "EARL Automation<earl@earlbdc.com>",
                             "to": result[5],
                             "bcc": "earl-email-validation@contactdms.com; steve@contactdms.com",
-                            "subject": result[2],
+                            "subject": result[2] + ' - ' + result[20],
                             "text": text_body,
                             "o:tracking": "False",
                         }
@@ -1654,10 +1655,9 @@ def send_daily_recap_report(campaign_id):
                 store_reporting_email = "earl-email-validation@contactdms.com"
 
             report_date = yesterday
-            msg_subject = str(store_name) + " EARL " + str(campaign_type) + " Daily Recap Report for " + str(report_date)
+            msg_subject = str(store_name) + " " + str(campaign_type) + " Daily Recap Report for " + str(report_date)
             msg_body_text = str(store_name) + ' ' + str(campaign_name) + ' ' + str(campaign_type)\
-                            + " Daily Visitors recap report for " + str(yesterday) + " is attached.\n\nThank You!\n\n" \
-                                                                                     "Your Diamond Media Solutions Team"
+                            + " Daily Visitors recap report for " + str(yesterday)
 
             # execute the query and set the results
             results = Visitor.query.join(AppendedVisitor, Visitor.id == AppendedVisitor.visitor)\
@@ -1716,7 +1716,7 @@ def send_daily_recap_report(campaign_id):
                 csv_content = si.getvalue().strip('\r\n')
 
                 # name the file
-                report_file_name = 'EARL-{}-Daily-Recap-Report-{}.csv'.format(campaign_type, report_date)
+                report_file_name = '{}-{}-Daily-Recap-Report-{}.csv'.format(campaign.name, campaign_type, report_date)
                 report_data = csv_content
 
                 # set up mailgun payload
