@@ -2251,7 +2251,7 @@ def admin_campaign_report():
             si = StringIO()
             row_heading = []
             row_heading.append('Job Number')
-            row_heading.append('Campaign Tactic and Name')
+            row_heading.append('Tactic Number')
             row_heading.append('Total Visitors')
             row_heading.append('Total Appends')
 
