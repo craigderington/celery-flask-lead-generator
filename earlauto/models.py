@@ -112,12 +112,25 @@ class AppendedVisitor(db.Model):
     ppm_type = Column(String(10))
     ppm_indicator = Column(String(10))
     ppm_segment = Column(String(50))
+    auto_transaction_date = Column(String(50))
+    last_seen = Column(String(50))
+    birth_year = Column(Integer)
+    income_range = Column(String(50))
+    home_owner_renter = Column(String(50))
+    auto_purchase_type = Column(String(100))
 
     def __repr__(self):
         return '{} {}'.format(
             self.first_name,
             self.last_name
         )
+    
+    def get_visitor_age(self):
+        if self.birth_year:
+            today = datetime.now()
+            age = int(today.year - self.birth_year)
+            return '{}'.format(str(age))
+        return ''    
 
 
 class Lead(db.Model):
