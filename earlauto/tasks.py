@@ -326,7 +326,7 @@ def append_visitor(new_visitor_id):
                                         Store.id == campaign.store_id
                                     ).first()
 
-                                    url = 'https://datamatchapi.com/DMSApi/GetDmsApiData?IP={}&Dealer=DMS&Client=DMS' \
+                                    url = 'https://datamatchapi.com/DMSApiV2/DMSApi/GetDmsApiData?IP={}&Dealer=DMS&Client=DMS' \
                                           '&SubClient=Diamond-CRMDev&product=earl' \
                                           '&JobNumber={}&ClientID={}&VendorID=DMS&DaysToSuppress=0&Radius={}&ZipCode={}'\
                                         .format(
@@ -362,6 +362,12 @@ def append_visitor(new_visitor_id):
                                             ppm_type = json_obj[0]['PPM_Type']
                                             ppm_indicator = json_obj[0]['PPM_Indicator']
                                             ppm_segment = json_obj[0]['PPM_Segment']
+                                            auto_trans_date = json_obj[0]['First_Seen']
+                                            last_seen = json_obj[0]['Last_Seen']
+                                            birth_year = json_obj[0]['Birth_Year']
+                                            income_range = json_obj[0]['Income_Range']
+                                            home_owner_renter = json_obj[0]['Home_OwnerRenter']
+                                            auto_purchase_type = json_obj[0]['Auto_Purchase_Type']
 
                                             # create the appended visitor record and commit
                                             appended_visitor = AppendedVisitor(
@@ -384,7 +390,13 @@ def append_visitor(new_visitor_id):
                                                 processed=False,
                                                 ppm_type=ppm_type,
                                                 ppm_indicator=ppm_indicator,
-                                                ppm_segment=ppm_segment
+                                                ppm_segment=ppm_segment,
+                                                auto_trans_date=auto_trans_date,
+                                                last_seen=last_seen,
+                                                birth_year=birth_year,
+                                                income_range=income_range,
+                                                home_owner_renter=home_owner_renter,
+                                                auto_purchase_type=auto_purchase_type
                                             )
 
                                             db.session.add(appended_visitor)
