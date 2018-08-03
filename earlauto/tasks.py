@@ -285,7 +285,7 @@ def append_visitor(new_visitor_id):
 
     # create request headers
     hdr = {'user-agent': 'EARL Automation Server v.01', 'content-type': 'application/json'}
-    retry_value = 3
+    retry_value = 3    
 
     # check to make sure 'new_visitor_id' is an integer
     # if not, convert to an integer
@@ -368,6 +368,13 @@ def append_visitor(new_visitor_id):
                                             income_range = json_obj[0]['Income_Range']
                                             home_owner_renter = json_obj[0]['Home_OwnerRenter']
                                             auto_purchase_type = json_obj[0]['Auto_Purchase_Type']
+                                            
+                                            # make sure the birth_year is an integer
+                                            if birth_year != '':
+                                                if not isinstance(birth_year, int):
+                                                    birth_year = int(birth_year)
+                                            else:
+                                                birth_year = int(0)
 
                                             # create the appended visitor record and commit
                                             appended_visitor = AppendedVisitor(
