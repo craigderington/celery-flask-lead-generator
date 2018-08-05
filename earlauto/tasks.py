@@ -351,7 +351,7 @@ def append_visitor(new_visitor_id):
                                             email = json_obj[0]['EMail']
                                             credit_range = json_obj[0]['InferredCreditScore']
                                             car_make = json_obj[0]['MAKE']
-                                            state = json_obj[0]['state']
+                                            state = json_obj[0]['State']
                                             city = json_obj[0]['City']
                                             zip_code = json_obj[0]['ZipCode']
                                             car_year = json_obj[0]['YEAR']
