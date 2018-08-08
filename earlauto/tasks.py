@@ -966,11 +966,11 @@ def send_auto_adf_lead(lead_id):
                                 "cc": "earl-email-validation@contactdms.com",
                                 "subject": str(result[5]) + ' ' + campaign_type.name + ' DMS XML Lead',
                                 "text": "<?xml version='1.0' encoding='UTF-8'?>" +
-                                "<?ADF VERSION='1.0'?>" +
+                                '<?ADF VERSION="1.0"?>' +
                                 "<adf>" +
                                 "<prospect>" +
                                 "<requestdate>" + datetime.datetime.now().strftime("%x") + "</requestdate>" +
-                                "<vehicle interest='trade-in' status='used'>" +
+                                '<vehicle interest="trade-in" status="used">' +
                                 '<id sequence="1" source="' + str(result[5]) + ' ' + campaign_type.name + ' DMS"></id>' +
                                 "<year>" + str(result[16]) + "</year>" +
                                 "<make>" + str(result[18]) + "</make>" +
@@ -978,8 +978,8 @@ def send_auto_adf_lead(lead_id):
                                 "</vehicle>" +
                                 "<customer>" +
                                 "<contact>" +
-                                "<name part='full'>" + str(result[7]) + ' ' + str(result[8]) + "</name>" +
-                                "<address type='home'>" +
+                                '<name part="full">' + str(result[7]) + ' ' + str(result[8]) + '</name>' +
+                                '<address type="home">' +
                                 "<street>" + str(result[9]) + "</street>" +
                                 "<city>" + str(result[10]) + "</city>" +
                                 "<regioncode>" + str(result[11]) + "</regioncode>" +
@@ -994,11 +994,11 @@ def send_auto_adf_lead(lead_id):
                                 '<id source="' + str(result[5]) + ' DMS">' + str(result[5]) + ' ' + campaign_type.name + ' DMS</id>' +
                                 "<vendorname>" + str(result[5]) + "</vendorname>" +
                                 "<contact>" +
-                                "<name part='full'>" + str(result[5]) + "</name>" +
+                                '<name part="full">' + str(result[5]) + '</name>' +
                                 "</contact>" +
                                 "</vendor>" +
                                 "<provider>" +
-                                "<name part='full'>" + str(result[5]) + ' ' + campaign_type.name + " DMS</name>" +
+                                '<name part="full">' + str(result[5]) + ' ' + campaign_type.name + ' DMS</name>' +
                                 "<service>" + str(result[5]) + ' ' + campaign_type.name + " DMS</service>" +
                                 "<url>None</url>" +
                                 "</provider>" +
