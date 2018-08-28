@@ -823,7 +823,7 @@ def send_lead_to_dealer(lead_id):
                         payload = {
                             "from": "EARL Automation<earl@earlbdc.com>",
                             "to": result[5],
-                            "bcc": "earl-email-validation@contactdms.com; steve@contactdms.com",
+                            "bcc": "earl-email-validation@contactdms.com",
                             "subject": result[2] + ' - ' + result[20],
                             "text": text_body,
                             "o:tracking": "False",
