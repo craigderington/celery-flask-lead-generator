@@ -2030,30 +2030,58 @@ def update_global_dashboard():
     # run the dashboard queries
 
     try:
+        current_dashboard = GlobalDashboard.query.order_by(
+            GlobalDashboard.id.desc()
+        ).limit(1).one()
+
         total_stores = Store.query.count()
         active_stores = Store.query.filter(Store.status == 'ACTIVE').count()
         total_campaigns = Campaign.query.count()
         active_campaigns = Campaign.query.filter(Campaign.status == 'ACTIVE').count()
 
         stmt0 = text("select sum(v.num_visits) as global_visitors "
-                     "from visitors v ")
+                     "from visitors v "
+                     "where v.created_date > '{}'".format(current_dashboard.last_update))
 
         global_visitors = db.session.query('global_visitors').from_statement(stmt0).all()
-        unique_visitors = Visitor.query.count()
-        us_visitors = Visitor.query.filter(Visitor.country_code == 'US').count()
-        total_appends = AppendedVisitor.query.count()
-        total_rtns = Lead.query.filter(Lead.sent_to_dealer == 1).count()
-        total_followup_emails = Lead.query.filter(Lead.followup_email == 1).count()
-        total_rvms = Lead.query.filter(Lead.rvm_sent == 1, Lead.rvm_status == 'LOADED').count()
+        unique_visitors = Visitor.query.filter(
+            Visitor.created_date > current_dashboard.last_update
+        ).count()
+
+        us_visitors = Visitor.query.filter(
+            Visitor.created_date > current_dashboard.last_update,
+            Visitor.country_code == 'US'
+        ).count()
+
+        total_appends = AppendedVisitor.query.filter(
+            AppendedVisitor.created_date > current_dashboard.last_update
+        ).count()
+
+        total_rtns = Lead.query.filter(
+            Lead.created_date > current_dashboard.last_update,
+            Lead.sent_to_dealer == 1
+        ).count()
+
+        total_followup_emails = Lead.query.filter(
+            Lead.created_date > current_dashboard.last_update,
+            Lead.followup_email == 1
+        ).count()
+
+        total_rvms = Lead.query.filter(
+            Lead.created_date > current_dashboard.last_update,
+            Lead.rvm_sent == 1,
+            Lead.rvm_status == 'LOADED'
+        ).count()
 
         # calc the percentages
-        total_global_visitors = int(global_visitors[0][0])
-        total_unique_visitors = int(unique_visitors)
-        total_us_visitors = int(us_visitors)
-        total_appends = int(total_appends)
-        total_sent_to_dealer = int(total_rtns)
-        total_sent_followup_emails = int(total_followup_emails)
-        total_rvms_sent = int(total_rvms)
+        total_global_visitors = int(current_dashboard.total_global_visitors) + int(global_visitors[0][0])
+        total_unique_visitors = int(current_dashboard.total_unique_visitors) + int(unique_visitors)
+        total_us_visitors = int(current_dashboard.total_us_visitors) + int(us_visitors)
+        total_appends = int(current_dashboard.total_appends) + int(total_appends)
+        total_sent_to_dealer = int(current_dashboard.total_sent_to_dealer) + int(total_rtns)
+        total_sent_followup_emails = int(current_dashboard.total_sent_followup_emails) + int(total_followup_emails)
+        total_rvms_sent = int(current_dashboard.total_rvms_sent) + int(total_rvms)
+
         global_append_rate = float((total_appends / total_global_visitors) * 100.0)
         unique_append_rate = float((total_appends / total_unique_visitors) * 100.0)
         us_append_rate = float((total_appends / total_us_visitors) * 100.0)
