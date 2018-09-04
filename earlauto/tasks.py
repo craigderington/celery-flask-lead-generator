@@ -2034,6 +2034,12 @@ def update_global_dashboard():
             GlobalDashboard.id.desc()
         ).limit(1).one()
 
+        if current_dashboard:
+            dashboard_lastupdated = current_dashboard.last_update
+        else:
+            dashboard_lastupdated = datetime.datetime.now() - timedelta(hours=2)
+            dashboard_lastupdated = dashboard_lastupdated.strptime(dashboard_lastupdated, "%Y-%m-%d %H:%M:%S")
+
         total_stores = Store.query.count()
         active_stores = Store.query.filter(Store.status == 'ACTIVE').count()
         total_campaigns = Campaign.query.count()
@@ -2041,34 +2047,34 @@ def update_global_dashboard():
 
         stmt0 = text("select sum(v.num_visits) as global_visitors "
                      "from visitors v "
-                     "where v.created_date > '{}'".format(current_dashboard.last_update))
+                     "where v.created_date > '{}'".format(dashboard_lastupdated))
 
         global_visitors = db.session.query('global_visitors').from_statement(stmt0).all()
         unique_visitors = Visitor.query.filter(
-            Visitor.created_date > current_dashboard.last_update
+            Visitor.created_date > dashboard_lastupdated
         ).count()
 
         us_visitors = Visitor.query.filter(
-            Visitor.created_date > current_dashboard.last_update,
+            Visitor.created_date > dashboard_lastupdated,
             Visitor.country_code == 'US'
         ).count()
 
         total_appends = AppendedVisitor.query.filter(
-            AppendedVisitor.created_date > current_dashboard.last_update
+            AppendedVisitor.created_date > dashboard_lastupdated
         ).count()
 
         total_rtns = Lead.query.filter(
-            Lead.created_date > current_dashboard.last_update,
+            Lead.created_date > dashboard_lastupdated,
             Lead.sent_to_dealer == 1
         ).count()
 
         total_followup_emails = Lead.query.filter(
-            Lead.created_date > current_dashboard.last_update,
+            Lead.created_date > dashboard_lastupdated,
             Lead.followup_email == 1
         ).count()
 
         total_rvms = Lead.query.filter(
-            Lead.created_date > current_dashboard.last_update,
+            Lead.created_date > dashboard_lastupdated,
             Lead.rvm_sent == 1,
             Lead.rvm_status == 'LOADED'
         ).count()
