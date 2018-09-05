@@ -1980,7 +1980,7 @@ def update_store_dashboard(store_id):
 
         else:
             # log the result
-            logger.info('Store {} not active or archived.  Task Aborted!'.format(store_id)
+            logger.warning('Store {} not active or archived.  Task Aborted!'.format(store_id))
 
     except exc.SQLAlchemyError as err:
         logger.info('Database returned error: {}'.format(str(err)))
