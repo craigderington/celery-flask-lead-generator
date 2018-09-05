@@ -1917,8 +1917,8 @@ def update_store_dashboard(store_id):
                 total_sent_followup_emails = store_dashboard.total_sent_followup_emails
                 total_sent_rvms = store_dashboard.total_rvms_sent
             else:
-                store_dashboard_last_updated = datetime.datetime.now() - timedelta(hours=2)
-                store_dashboard_last_updated = datetime.datetime.strptime(store_dashboard_last_updated,
+                store_dashboard_last_updated = datetime.datetime.now() - timedelta(hours=6)
+                store_dashboard_last_updated = datetime.datetime.strftime(store_dashboard_last_updated,
                                                                           "%Y-%m-%d %H:%M:%S")
                 total_global_visitors = 0
                 total_unique_visitors = 0
@@ -2075,7 +2075,7 @@ def update_global_dashboard():
     :return: none
     """
     current_time = datetime.datetime.now()
-
+    total_global_new_visitors = 0
     formatted_datetime = current_time.strftime('%Y-%m-%d %H:%M:%S')
 
     # run the dashboard queries
@@ -2089,7 +2089,7 @@ def update_global_dashboard():
             dashboard_lastupdated = current_dashboard.last_update
         else:
             dashboard_lastupdated = datetime.datetime.now() - timedelta(hours=2)
-            dashboard_lastupdated = datetime.datetime.strptime(dashboard_lastupdated, "%Y-%m-%d %H:%M:%S")
+            dashboard_lastupdated = datetime.datetime.strftime(dashboard_lastupdated, "%Y-%m-%d %H:%M:%S")
 
         total_stores = Store.query.count()
         active_stores = Store.query.filter(Store.status == 'ACTIVE').count()
@@ -2100,7 +2100,14 @@ def update_global_dashboard():
                      "from visitors v "
                      "where v.created_date > '{}'".format(dashboard_lastupdated))
 
+        # start counting
         global_visitors = db.session.query('global_visitors').from_statement(stmt0).all()
+
+        if global_visitors[0][0] is None:
+            total_global_new_visitors = 0
+        else:
+            total_global_new_visitors = int(global_visitors[0][0])
+
         unique_visitors = Visitor.query.filter(
             Visitor.created_date > dashboard_lastupdated
         ).count()
@@ -2131,7 +2138,7 @@ def update_global_dashboard():
         ).count()
 
         # calc the percentages
-        total_global_visitors = int(current_dashboard.total_global_visitors) + int(global_visitors[0][0])
+        total_global_visitors = int(current_dashboard.total_global_visitors) + total_global_new_visitors
         total_unique_visitors = int(current_dashboard.total_unique_visitors) + int(unique_visitors)
         total_us_visitors = int(current_dashboard.total_us_visitors) + int(us_visitors)
         total_appends = int(current_dashboard.total_appends) + int(total_appends)
@@ -2196,73 +2203,125 @@ def update_campaign_dashboard(campaign_id):
     # ok, get the campaign - active campaigns only
     try:
         campaign = Campaign.query.filter(
-            Campaign.id == campaign_id,
-            Campaign.status == 'ACTIVE'
+            Campaign.id == campaign_id
         ).one()
 
         # do we have a valid campaign
         if campaign:
 
-            us_visitors = Visitor.query.filter(Visitor.campaign_id == campaign.id, Visitor.country_code == 'US').count()
-            total_appends = Visitor.query.join(
-                AppendedVisitor, Visitor.id == AppendedVisitor.visitor
-            ).filter(Visitor.campaign_id == campaign.id).count()
+            # check the status
+            if campaign.status == 'ACTIVE' and campaign.archived == 0:
 
-            stmt1 = text("SELECT count(l.id) as total_rtns "
-                         "from visitors v, appendedvisitors av, leads l where v.id = av.visitor "
-                         "and l.appended_visitor_id = av.id "
-                         "and v.campaign_id={} "
-                         "and l.sent_to_dealer=1".format(campaign.id))
-            stmt2 = text("SELECT count(l.id) as total_followup_emails "
-                         "from visitors v, appendedvisitors av, leads l where v.id = av.visitor "
-                         "and l.appended_visitor_id = av.id "
-                         "and v.campaign_id={} "
-                         "and l.followup_email=1".format(campaign.id))
-            stmt3 = text("SELECT count(l.id) as total_rvms "
-                         "from visitors v, appendedvisitors av, leads l where v.id = av.visitor "
-                         "and l.appended_visitor_id = av.id "
-                         "and v.campaign_id={} "
-                         "and l.rvm_sent=1".format(campaign.id))
+                campaign_dashboard = CampaignDashboard.query.filter(
+                    CampaignDashboard.campaign_id == campaign_id
+                ).order_by(CampaignDashboard.id.desc()).limit(1).one()
 
-            # set the values
-            total_rtns = db.session.query('total_rtns').from_statement(stmt1).all()
-            total_followup_emails = db.session.query('total_followup_emails').from_statement(stmt2).all()
-            total_rvms = db.session.query('total_rvms').from_statement(stmt3).all()
+                if campaign_dashboard:
+                    dashboard_lastupdated = campaign_dashboard.last_update
+                    total_campaign_appends = campaign_dashboard.total_appends
+                    total_campaign_rvms = campaign_dashboard.total_rvms
+                    total_campaign_rtns = campaign_dashboard.total_rtns
+                    total_campaign_us_visitors = campaign_dashboard.total_visitors
+                    total_campaign_followup_emails = campaign_dashboard.total_followup_emails
 
-            # calc the rates
-            if total_appends > 0:
-                append_rate = float(int(total_appends) / int(us_visitors) * 100.0)
+                    if not dashboard_lastupdated:
+                        dashboard_lastupdated = datetime.datetime.now() - timedelta(hours=4)
+                        dashboard_lastupdated = datetime.datetime.strftime(dashboard_lastupdated, "%Y-%m-%d %H:%M:%S")
 
-                try:
+                else:
+                    dashboard_lastupdated = datetime.datetime.now() - timedelta(hours=4)
+                    dashboard_lastupdated = datetime.datetime.strftime(dashboard_lastupdated, "%Y-%m-%d %H:%M:%S")
+                    total_campaign_appends = 0
+                    total_campaign_rvms = 0
+                    total_campaign_rtns = 0
+                    total_campaign_us_visitors = 0
+                    total_campaign_followup_emails = 0
 
-                    new_dashboard = CampaignDashboard(
-                        store_id=campaign.store_id,
-                        campaign_id=campaign.id,
-                        total_visitors=us_visitors,
-                        total_appends=total_appends,
-                        total_rtns=total_rtns[0][0],
-                        total_followup_emails=total_followup_emails[0][0],
-                        total_rvms=total_rvms[0][0],
-                        append_rate=append_rate,
-                        last_update=current_day
-                    )
+                # start counting
+                us_visitors = Visitor.query.filter(
+                    Visitor.campaign_id == campaign.id,
+                    Visitor.created_date > dashboard_lastupdated,
+                    Visitor.country_code == 'US'
+                ).count()
 
-                    db.session.add(new_dashboard)
-                    db.session.commit()
+                total_appends = Visitor.query.join(
+                    AppendedVisitor, Visitor.id == AppendedVisitor.visitor
+                ).filter(Visitor.campaign_id == campaign.id, Visitor.created_date > dashboard_lastupdated).count()
 
-                    # log the result
-                    logger.info('Campaign {} Dealer Dashboard was updated at {}.'.format(campaign.name, current_day))
+                stmt1 = text("SELECT count(l.id) as total_rtns "
+                             "from visitors v, appendedvisitors av, leads l where v.id = av.visitor "
+                             "and l.appended_visitor_id = av.id "
+                             "and v.campaign_id={} "
+                             "and v.created_date > '{}' "
+                             "and l.sent_to_dealer=1".format(campaign.id, dashboard_lastupdated))
 
-                # log the exception
-                except exc.SQLAlchemyError as err:
-                    logger.info('Database returned error: {}'.format(str(err)))
+                stmt2 = text("SELECT count(l.id) as total_followup_emails "
+                             "from visitors v, appendedvisitors av, leads l where v.id = av.visitor "
+                             "and l.appended_visitor_id = av.id "
+                             "and v.campaign_id={} "
+                             "and v.created_date > '{}' "
+                             "and l.followup_email=1".format(campaign.id, dashboard_lastupdated))
+
+                stmt3 = text("SELECT count(l.id) as total_rvms "
+                             "from visitors v, appendedvisitors av, leads l where v.id = av.visitor "
+                             "and l.appended_visitor_id = av.id "
+                             "and v.campaign_id={} "
+                             "and v.created_date > '{}' "
+                             "and l.rvm_sent=1".format(campaign.id, dashboard_lastupdated))
+
+                # set the values
+                total_rtns = db.session.query('total_rtns').from_statement(stmt1).all()
+                total_followup_emails = db.session.query('total_followup_emails').from_statement(stmt2).all()
+                total_rvms = db.session.query('total_rvms').from_statement(stmt3).all()
+
+                # calc the rates
+                if total_appends > 0:
+                    total_visitors = int(us_visitors) + int(total_campaign_us_visitors)
+                    total_appends = int(total_appends) + int(total_campaign_appends)
+                    total_rtns = int(total_rtns[0][0]) + int(total_campaign_rtns)
+                    total_followup_emails = int(total_followup_emails[0][0]) + int(total_campaign_followup_emails)
+                    total_rvms = int(total_rvms[0][0]) + int(total_campaign_rvms)
+
+                    if total_visitors > 0:
+                        append_rate = float(int(total_appends) / int(total_visitors) * 100.0)
+
+                    try:
+
+                        new_dashboard = CampaignDashboard(
+                            store_id=campaign.store_id,
+                            campaign_id=campaign.id,
+                            total_visitors=total_visitors,
+                            total_appends=total_appends,
+                            total_rtns=total_rtns,
+                            total_followup_emails=total_followup_emails,
+                            total_rvms=total_rvms,
+                            append_rate=append_rate,
+                            last_update=current_day
+                        )
+
+                        db.session.add(new_dashboard)
+                        db.session.commit()
+
+                        # log the result
+                        logger.info('Campaign {} Dealer Dashboard was updated at {}.'.format(campaign.name, current_day))
+
+                    # log the exception
+                    except exc.SQLAlchemyError as err:
+                        logger.info('Database insert record returned an error: {}'.format(str(err)))
+
+            else:
+                # log the result
+                logger.warning('Campaign: {} NOT ACTIVE.  Task aborted.'.format(str(campaign_id)))
 
         else:
             # log the result
             logger.info('Campaign {} Not Found.  Task Aborted!'.format(campaign_id))
 
     except exc.SQLAlchemyError as err:
-        logger.info('Database returned error: {}'.format(str(err)))
+        logger.info('Database error getting Campaign: {}'.format(str(err)))
+
+    # return the campaign ID to the console
+    return campaign_id
 
 
 @celery.task(queue='reports', max_retries=3)
