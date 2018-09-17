@@ -1864,7 +1864,7 @@ def get_expired_campaigns():
         logger.warning('Database returned error: {}'.format(str(err)))
 
 
-@celery.task(queue='reports', max_retries=3)
+@celery.task(queue='stores', max_retries=3)
 def update_store_dashboard(store_id):
     """
     Update the store dashboard
@@ -2032,7 +2032,7 @@ def update_store_dashboard(store_id):
     return store_id
 
 
-@celery.task(queue='reports', max_retries=3)
+@celery.task(queue='stores', max_retries=3)
 def get_stores_for_dashboard():
     """
     Generate a list of store ID's and update the dashboard
@@ -2182,7 +2182,7 @@ def update_global_dashboard():
         logger.info('Database returned error: {}'.format(str(err)))
 
 
-@celery.task(queue='reports', max_retries=3)
+@celery.task(queue='campaigns', max_retries=3)
 def update_campaign_dashboard(campaign_id):
     """
     Update the Campaign dashboard
@@ -2324,7 +2324,7 @@ def update_campaign_dashboard(campaign_id):
     return campaign_id
 
 
-@celery.task(queue='reports', max_retries=3)
+@celery.task(queue='campaigns', max_retries=3)
 def get_campaigns_for_dashboard():
     """
     Get the Active Campaigns to Send to the Campaign Dashboard Task

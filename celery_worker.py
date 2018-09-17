@@ -33,18 +33,19 @@ def setup_periodic_tasks(sender, **kwargs):
     # period task executes every 2.5 seconds
     sender.add_periodic_task(2.5, get_new_visitors, name='EARL Get New Visitors')
 
-    # periodic task executes every 2 hours
-    sender.add_periodic_task(7200, update_global_dashboard, name='EARL Update Global Dashboard')
+    # periodic task executes every 2 hours (7200)
+    # periodic task executes every 4 hours (14400)
+    # periodic task to execute every 6 hours (21600)
+    # periodic tasks executes every 8 hours (28800)
+    sender.add_periodic_task(28800.0, get_campaigns_for_dashboard, name='EARL Update Campaign Dashboards')
 
-    # periodic task executes every 4 hours
-    sender.add_periodic_task(14400, get_campaigns_for_dashboard, name='EARL Update Campaign Dashboards')
-
-    # periodic task to execute every 6 hours
-    sender.add_periodic_task(21600, get_stores_for_dashboard, name='EARL Store Dashboard Refresh')
-
-    # periodic task executes every 12 hours
+    # periodic task executes every 12 hours (43200)
+    sender.add_periodic_task(43200.0, update_global_dashboard, name='EARL Update Global Dashboard')
     sender.add_periodic_task(43200.0, resend_http_errors, name='EARL Resend HTTP Errors')
     sender.add_periodic_task(43200.0, resend_leads_to_dealer, name='EARL Resend Leads to Dealer')
+
+    # periodic task executes every 24 hours (86400)
+    sender.add_periodic_task(86400.0, get_stores_for_dashboard, name='EARL Update Store Dashboards')
 
     # periodic task executes on crontab schedule
     sender.add_periodic_task(
