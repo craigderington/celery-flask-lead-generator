@@ -2387,18 +2387,19 @@ def admin_campaign_report():
     rows = []
 
     try:
-        stmt1 = text("select c.job_number, c.name as campaign_name, "
+        stmt1 = text("select s.name as store_name, c.job_number, c.name as campaign_name, "
                      "sum(v.num_visits) as total_visitors, "
                      "count(av.id) as total_appends "                    
-                     "from visitors v, appendedvisitors av, campaigns c "
+                     "from visitors v, appendedvisitors av, campaigns c, stores s "
                      "where v.id = av.visitor "
                      "and v.campaign_id = c.id "
+                     "and v.store_id = s.id "
                      "and c.status = '{}' "
                      "and (v.created_date between '{}' and '{}') "
-                     "group by c.job_number, c.name "
-                     "ORDER BY c.job_number, c.name asc".format('ACTIVE', start_date, end_date))
+                     "group by s.name, c.job_number, c.name "
+                     "ORDER BY s.name, c.job_number, c.name asc".format('ACTIVE', start_date, end_date))
 
-        results = db.session.query('job_number', 'campaign_name',
+        results = db.session.query('store_name', 'job_number', 'campaign_name',
                                    'total_visitors', 'total_appends').from_statement(stmt1).all()
 
         if results:
@@ -2412,6 +2413,7 @@ def admin_campaign_report():
 
             for result in results:
                 row = []
+                row.append(result.store_name)
                 row.append(result.job_number)
                 row.append(result.campaign_name)
                 row.append(result.total_visitors)
@@ -2421,8 +2423,9 @@ def admin_campaign_report():
             # set the header row
             si = StringIO()
             row_heading = []
-            row_heading.append('Job Number')
+            row_heading.append('Store Name')
             row_heading.append('Tactic Number')
+            row_heading.append('Job Number')
             row_heading.append('Total Visitors')
             row_heading.append('Total Appends')
 
