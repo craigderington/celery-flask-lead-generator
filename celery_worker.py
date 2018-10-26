@@ -45,7 +45,7 @@ def setup_periodic_tasks(sender, **kwargs):
     sender.add_periodic_task(43200.0, resend_leads_to_dealer, name='EARL Resend Leads to Dealer')
 
     # periodic task executes every 24 hours (86400)
-    sender.add_periodic_task(86400.0, get_stores_for_dashboard, name='EARL Update Store Dashboards')
+    # sender.add_periodic_task(86400.0, get_stores_for_dashboard, name='EARL Update Store Dashboards')
 
     # periodic task executes on crontab schedule
     sender.add_periodic_task(
