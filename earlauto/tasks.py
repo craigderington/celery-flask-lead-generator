@@ -2248,8 +2248,8 @@ def update_campaign_dashboard(campaign_id):
                             total_rvms=total_rvms,
                             append_rate=append_rate,
                             last_update=current_day,
-                            global_visitors=global_visitors,
-                            unique_visitors=unique_visitors
+                            global_visitors=total_global_visitors,
+                            unique_visitors=total_unique_visitors
                         )
 
                         db.session.add(new_dashboard)
