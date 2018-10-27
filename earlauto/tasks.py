@@ -1906,25 +1906,32 @@ def update_store_dashboard(store_id):
 
                 if dashboard:
 
-                    gl_append_rate = float(int(dashboard.total_appends) / int(dashboard.total_global_visitors) * 100.0)
-                    uq_append_rate = float(int(dashboard.total_appends) / int(dashboard.total_unique_visitors) * 100.0)
-                    us_append_rate = float(int(dashboard.total_appends) / int(dashboard.total_us_visitors) * 100.0)
+                    if dashboard.total_appends > 0:
 
-                    try:
-                        dashboard.total_campaigns = int(total_campaigns)
-                        dashboard.active_campaigns = int(active_campaigns)
-                        dashboard.global_append_rate = gl_append_rate
-                        dashboard.unique_append_rate = uq_append_rate
-                        dashboard.us_append_rate = us_append_rate
+                        gl_append_rate = float(int(dashboard.total_appends) / int(dashboard.total_global_visitors) * 100.0)
+                        uq_append_rate = float(int(dashboard.total_appends) / int(dashboard.total_unique_visitors) * 100.0)
+                        us_append_rate = float(int(dashboard.total_appends) / int(dashboard.total_us_visitors) * 100.0)
 
-                        # save the dashboard instance
-                        db.session.commit()
-                        db.session.flush()
+                        try:
+                            dashboard.total_campaigns = int(total_campaigns)
+                            dashboard.active_campaigns = int(active_campaigns)
+                            dashboard.global_append_rate = gl_append_rate
+                            dashboard.unique_append_rate = uq_append_rate
+                            dashboard.us_append_rate = us_append_rate
 
-                        logger.info('Store {} dashboard was successfully updated on {}'.format(store.name, today))
+                            # save the dashboard instance
+                            db.session.commit()
+                            db.session.flush()
 
-                    except exc.SQLAlchemyError as db_err:
-                        logger.info('Database returned error: {}'.format(str(db_err)))
+                            logger.info('Store {} dashboard was successfully updated on {}'.format(store.name, today))
+
+                        except exc.SQLAlchemyError as db_err:
+                            logger.info('Database returned error: {}'.format(str(db_err)))
+
+                    # gracefully handle divide by zero error
+                    else:
+                        logger.warning('Store Dashboard {} has Zero Appends.  '
+                                       'This would cause a Divide by Zero error.  Task Aborted!'.format(dashboard.id))
 
                 else:
                     logger.info('Store Dashboard for ID: {} was not found.  Task Aborted!'.format(store_id))
