@@ -2323,8 +2323,8 @@ def get_campaigns_for_dashboard():
 
             # loop over the queryset and call the dashboard function
             for campaign in campaigns:
-                # update_campaign_dashboard.delay(campaign.id)
-                campaign_dashboard_adjustment.delay(campaign.id)
+                update_campaign_dashboard.delay(campaign.id)
+                # campaign_dashboard_adjustment.delay(campaign.id)
                 campaign_count += 1
 
             # log the result
