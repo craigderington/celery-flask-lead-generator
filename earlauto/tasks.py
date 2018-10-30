@@ -2228,10 +2228,10 @@ def update_campaign_dashboard(campaign_id):
                     total_global_visitors = int(global_visitors) + int(total_campaign_global_visitors)
                     total_unique_visitors = int(unique_visitors) + int(total_campaign_unique_visitors)
                     total_us_visitors = int(us_visitors) + int(total_campaign_us_visitors)
-                    total_appends = int(total_appends) + int(total_campaign_appends)
-                    total_rtns = int(total_rtns[0][0]) + int(total_campaign_rtns)
-                    total_followup_emails = int(total_followup_emails[0][0]) + int(total_campaign_followup_emails)
-                    total_rvms = int(total_rvms[0][0]) + int(total_campaign_rvms)
+                    total_total_appends = int(total_appends) + int(total_campaign_appends)
+                    total_total_rtns = int(total_rtns[0][0]) + int(total_campaign_rtns)
+                    total_total_followup_emails = int(total_followup_emails[0][0]) + int(total_campaign_followup_emails)
+                    total_total_rvms = int(total_rvms[0][0]) + int(total_campaign_rvms)
 
                     if total_us_visitors > 0:
                         append_rate = float(int(total_appends) / int(total_us_visitors) * 100.0)
@@ -2242,10 +2242,10 @@ def update_campaign_dashboard(campaign_id):
                             store_id=campaign.store_id,
                             campaign_id=campaign.id,
                             total_visitors=total_us_visitors,
-                            total_appends=total_appends,
-                            total_rtns=total_rtns,
-                            total_followup_emails=total_followup_emails,
-                            total_rvms=total_rvms,
+                            total_appends=total_total_appends,
+                            total_rtns=total_total_rtns,
+                            total_followup_emails=total_total_followup_emails,
+                            total_rvms=total_total_rvms,
                             append_rate=append_rate,
                             last_update=current_day,
                             global_visitors=total_global_visitors,
@@ -2260,28 +2260,36 @@ def update_campaign_dashboard(campaign_id):
                         logger.info('Campaign {} Dealer Dashboard was updated at {}.'.format(campaign.name, current_day))
 
                         try:
-                            store_dashboard.total_global_visitors = store_dashboard.total_global_visitors + total_global_visitors
-                            store_dashboard.total_unique_visitors = store_dashboard.total_unique_visitors + total_unique_visitors
-                            store_dashboard.total_us_visitors = store_dashboard.total_us_visitors + total_us_visitors
-                            store_dashboard.total_appends = store_dashboard.total_appends + total_appends
-                            store_dashboard.total_sent_to_dealer = store_dashboard.total_sent_to_dealer + total_rtns
-                            store_dashboard.total_sent_followup_emails = store_dashboard.total_sent_followup_emails + total_followup_emails
-                            store_dashboard.total_rvms_sent = store_dashboard.total_rvms_sent + total_rvms
-                            store_dashboard.last_update = current_day
 
-                            # save the store dashboard instance
-                            db.session.commit()
-                            db.session.flush()
+                            s_board = StoreDashboard.query.get(store_dashboard.id)
 
-                            # call the store dashboard task to update the append rates
-                            update_store_dashboard.delay(campaign.store_id)
+                            try:
+                                s_board.total_global_visitors = store_dashboard.total_global_visitors + int(global_visitors)
+                                s_board.total_unique_visitors = store_dashboard.total_unique_visitors + int(unique_visitors)
+                                s_board.total_us_visitors = store_dashboard.total_us_visitors + int(us_visitors)
+                                s_board.total_appends = store_dashboard.total_appends + int(total_appends)
+                                s_board.total_sent_to_dealer = store_dashboard.total_sent_to_dealer + int(total_rtns[0][0])
+                                s_board.total_sent_followup_emails = store_dashboard.total_sent_followup_emails + int(total_followup_emails[0][0])
+                                s_board.total_rvms_sent = store_dashboard.total_rvms_sent + int(total_rvms[0][0])
+                                s_board.last_update = current_day
 
-                            # log the result
-                            logger.info(
-                                'Store {} Dashboard was updated at {}.'.format(campaign.store_id, current_day))
+                                # save the store dashboard instance
+                                db.session.commit()
+                                db.session.flush()
+
+                                # call the store dashboard task to update the append rates
+                                update_store_dashboard.delay(campaign.store_id)
+
+                                # log the result
+                                logger.info(
+                                    'Store {} Dashboard was successfully updated at {}.'.format(campaign.store_id, current_day))
+
+                            except exc.SQLAlchemyError as db_err:
+                                logger.info('Database update Store {} Dashboard returned an error: {}'.format(
+                                    campaign.store_id, str(db_err)))
 
                         except exc.SQLAlchemyError as db_err:
-                            logger.info('Database update Store {} Dashboard returned an error: {}'.format(
+                            logger.info('Database REFRESH Store {} Dashboard returned an error: {}'.format(
                                 campaign.store_id, str(db_err)))
 
                     # log the exception
