@@ -60,3 +60,4 @@ config.py
 celerybeat-schedule
 *.sqlite
 *.db
+db.py
