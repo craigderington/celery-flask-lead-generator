@@ -1635,7 +1635,7 @@ def send_daily_recap_report(campaign_id):
     # mailgun
     mailgun_url = 'https://api.mailgun.net/v3/mail.earlbdc.com/messages'
     mailgun_sandbox_url = 'https://api.mailgun.net/v3/sandbox3b609311624841c0bb2f9154e41e34de.mailgun.org/messages'
-    mailgun_apikey = 'key-dfd370f4412eaccce27394f7bceaee0e'
+    mailgun_apikey = ''
 
     # set up our report params
     if not isinstance(campaign_id, int):
@@ -2367,7 +2367,7 @@ def admin_campaign_report():
     # mailgun
     mailgun_url = 'https://api.mailgun.net/v3/mail.earlbdc.com/messages'
     mailgun_sandbox_url = 'https://api.mailgun.net/v3/sandbox3b609311624841c0bb2f9154e41e34de.mailgun.org/messages'
-    mailgun_apikey = 'key-dfd370f4412eaccce27394f7bceaee0e'
+    mailgun_apikey = ''
 
     current_day = datetime.datetime.now()
     one_day_ago = current_day - timedelta(days=1)
