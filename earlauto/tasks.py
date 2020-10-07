@@ -624,7 +624,7 @@ def verify_lead(new_lead_id):
     """
     # https://api.kickbox.io/v2/verify?email=' + lead.email + '&apikey=' + kickbox_api_key
     newleadid = new_lead_id
-    kickbox_api_key = 'test_b2a8972a20c5dafd8b08f6b1ebb323d6660db597fc8fde74e247af7e03776e19'
+    kickbox_api_key = ''
     kickbox_base_url = 'https://api.kickbox.io/v2/verify?email='
 
     hdr = {
@@ -754,7 +754,7 @@ def send_lead_to_dealer(lead_id):
     """
     mailgun_url = 'https://api.mailgun.net/v3/mail.earlbdc.com/messages'
     mailgun_sandbox_url = 'https://api.mailgun.net/v3/sandbox3b609311624841c0bb2f9154e41e34de.mailgun.org/messages'
-    mailgun_apikey = 'key-dfd370f4412eaccce27394f7bceaee0e'
+    mailgun_apikey = ''
 
     # check to make sure 'lead_id' is an integer
     # if not, convert to integer
@@ -907,7 +907,7 @@ def send_auto_adf_lead(lead_id):
     r = None
     mailgun_url = 'https://api.mailgun.net/v3/mail.earlbdc.com/messages'
     mailgun_sandbox_url = 'https://api.mailgun.net/v3/sandbox3b609311624841c0bb2f9154e41e34de.mailgun.org/messages'
-    mailgun_apikey = 'key-dfd370f4412eaccce27394f7bceaee0e'
+    mailgun_apikey = ''
 
     if not isinstance(lead_id, int):
         lead_id = int(lead_id)
@@ -1123,7 +1123,7 @@ def send_followup_email(lead_id):
 
     mailgun_url = 'https://api.mailgun.net/v3/mail.earlbdc.com/messages'
     mailgun_sandbox_url = 'https://api.mailgun.net/v3/sandbox3b609311624841c0bb2f9154e41e34de.mailgun.org/messages'
-    mailgun_apikey = 'key-dfd370f4412eaccce27394f7bceaee0e'
+    mailgun_apikey = ''
 
     if not isinstance(lead_id, int):
         lead_id = int(lead_id)
